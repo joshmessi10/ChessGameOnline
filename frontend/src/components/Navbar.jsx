@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LuPlay, LuUsers, LuUser, LuLogOut, LuSearch } from 'react-icons/lu';
+import { LuPlay, LuUsers, LuUser, LuLogOut, LuSearch, LuTrendingUp } from 'react-icons/lu';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -20,12 +20,12 @@ const Navbar = () => {
     fontWeight: 500,
     color: 'var(--text-secondary)',
     padding: '8px 12px',
+    textDecoration: 'none',
     transition: 'color 0.2s',
   };
 
   return (
     <nav style={{
-      borderBottom: '1px solid var(--border-color)',
       padding: '1.5rem 2rem',
       display: 'flex',
       justifyContent: 'space-between',
@@ -34,14 +34,16 @@ const Navbar = () => {
       position: 'sticky',
       top: 0,
       zIndex: 1000,
+      borderBottom: '1px solid var(--border-color)'
     }}>
       {/* Brand Logo - Top Left */}
-      <Link to="/" style={{ 
+      <Link to={user ? "/dashboard" : "/"} style={{ 
         fontFamily: 'Playfair Display, serif', 
         fontSize: '20px', 
         fontWeight: 800, 
         letterSpacing: '0.1em',
-        color: 'var(--text-primary)'
+        color: 'var(--text-primary)',
+        textDecoration: 'none'
       }}>
         CHESS<span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>CAMP</span>
       </Link>
@@ -51,6 +53,11 @@ const Navbar = () => {
         <Link to="/play" style={navLinkStyle}>
           <LuPlay size={16} /> Play
         </Link>
+        {user && (
+          <Link to="/dashboard" style={navLinkStyle}>
+            <LuTrendingUp size={16} /> Dashboard
+          </Link>
+        )}
         <Link to="/friends" style={navLinkStyle}>
           <LuUsers size={16} /> Social
         </Link>
@@ -73,7 +80,11 @@ const Navbar = () => {
                 fontSize: '13px',
                 fontWeight: 600,
                 padding: '8px 12px',
-                gap: '6px'
+                gap: '6px',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center'
               }}
             >
               <LuLogOut size={16} /> Exit
@@ -82,7 +93,7 @@ const Navbar = () => {
         ) : (
           <>
             <Link to="/login" style={{ ...navLinkStyle, color: 'var(--text-primary)' }}>Login</Link>
-            <Link to="/register" className="primary-btn" style={{ marginLeft: '8px' }}>
+            <Link to="/register" className="primary-btn" style={{ marginLeft: '8px', textDecoration: 'none' }}>
               Sign Up
             </Link>
           </>

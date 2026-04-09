@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LuLogIn, LuChevronRight } from 'react-icons/lu';
+import chessHero from '../components/chess.svg';
 
 const LoginPage = () => {
   const [username, setUsername] = useState('');
@@ -32,14 +33,37 @@ const LoginPage = () => {
       alignItems: 'center',
       justifyContent: 'center',
       padding: '2rem',
+      background: 'radial-gradient(circle at 50% 30%, #1c1c1c 0%, #0c0b0a 70%)',
+      position: 'relative',
+      overflow: 'hidden'
     }}>
+      {/* Background Graphic */}
+      <div style={{ 
+        position: 'absolute',
+        bottom: '2%',
+        left: '50%',
+        transform: 'translateX(-50%) scale(0.6)',
+        width: '100%',
+        maxWidth: '700px',
+        opacity: 0.1,
+        pointerEvents: 'none',
+        zIndex: 1
+      }}>
+        <img src={chessHero} alt="Chess Graphic" style={{ width: '100%', height: 'auto' }} />
+      </div>
+
       <div style={{
         width: '100%',
         maxWidth: '400px',
+        zIndex: 10,
+        backgroundColor: 'rgba(12, 11, 10, 0.8)',
+        padding: '3rem',
+        border: '1px solid var(--border-color)',
+        backdropFilter: 'blur(10px)'
       }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
-          <h1 style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>Login</h1>
+          <h1 style={{ fontSize: '3rem', marginBottom: '0.5rem', fontFamily: 'Playfair Display, serif' }}>Login</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
             Professional Chess Platform
           </p>
