@@ -128,7 +128,7 @@ const ProfilePage = () => {
                     display: 'grid', gridTemplateColumns: '120px 1fr 150px 100px', alignItems: 'center',
                     backgroundColor: isWinner ? 'rgba(34, 197, 94, 0.03)' : 'transparent'
                   }}>
-                    <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: isWinner ? 'var(--success-color)' : 'var(--text-secondary)' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: isWinner ? 'var(--success-color)' : (m.result === 'draw' ? '#f59e0b' : 'var(--error-color)') }}>
                       {isWinner ? 'Victory' : (m.result === 'draw' ? 'Draw' : 'Defeat')}
                     </div>
                     <div>

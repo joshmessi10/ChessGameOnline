@@ -56,7 +56,7 @@ const MatchmakingPage = () => {
             stopSearch();
             navigate(`/play/${data.matchID}`);
           }
-        } catch {}
+        } catch { }
       }, 3000);
     }
     return () => stopLocal();
@@ -81,7 +81,7 @@ const MatchmakingPage = () => {
   const stopSearch = async () => {
     stopLocal();
     setSearching(false);
-    try { await api.delete('/matchmaking/leave'); } catch {}
+    try { await api.delete('/matchmaking/leave'); } catch { }
   };
 
   const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -94,7 +94,7 @@ const MatchmakingPage = () => {
             <LuLoader size={32} className="spin" />
           </div>
           <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } .spin { animation: spin 1s linear infinite; }`}</style>
-          
+
           <h2 style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>Searching</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '2.5rem' }}>
             Looking for a match in <strong>{mode.toUpperCase()}</strong> pool • {formatTime(elapsed)} elapsed
@@ -127,9 +127,9 @@ const MatchmakingPage = () => {
         className="primary-btn"
         style={{ width: '100%', height: '60px', fontSize: '16px', borderRadius: 0 }}
       >
-        {mode ? `Initiate Matchmaking: ${mode.toUpperCase()}` : 'Select a Category'}
+        {mode ? `In Queue: ${mode.toUpperCase()}` : 'Select a Category'}
       </button>
-      
+
       <p style={{ textAlign: 'center', marginTop: '1.5rem', color: 'var(--text-secondary)', fontSize: '12px', letterSpacing: '0.02em' }}>
         Matches are organized according to your global Ranking points.
       </p>

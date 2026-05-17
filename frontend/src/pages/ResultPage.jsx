@@ -58,7 +58,7 @@ const ResultPage = () => {
           <button onClick={() => navigate('/play')} className="primary-btn" style={{ flex: 1, height: '56px' }}>
             <LuPlay size={18} /> New Match
           </button>
-          <button onClick={() => navigate('/')} className="secondary-btn" style={{ flex: 1, height: '56px' }}>
+          <button onClick={() => navigate('/dashboard')} className="secondary-btn" style={{ flex: 1, height: '56px' }}>
             <LuLayoutDashboard size={18} /> Dashboard
           </button>
         </div>
