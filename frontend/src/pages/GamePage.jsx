@@ -299,6 +299,28 @@ const GamePage = () => {
     }
   };
 
+  // Determine if a piece is draggable (locks opponent pieces completely)
+  const isDraggablePiece = ({ piece }) => {
+    if (!match || match.estado !== 'in_progress') return false;
+
+    const userColor = user?.id === match.jugador_blancas_id ? 'white' : 'black';
+    const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+    
+    // Only draggable on your turn
+    if (userColor !== currentTurnColor) return false;
+
+    // Resolve piece color from string ('wP', 'bN') or object
+    let pieceColor = '';
+    if (typeof piece === 'string') {
+      pieceColor = piece[0];
+    } else if (piece && piece.color) {
+      pieceColor = piece.color;
+    }
+
+    // Only your own pieces are draggable
+    return (pieceColor === 'w' && userColor === 'white') || (pieceColor === 'b' && userColor === 'black');
+  };
+
   // Handle resign
   const handleResign = async () => {
     if (!match || match.estado !== 'in_progress') return;
@@ -384,7 +406,7 @@ const GamePage = () => {
             onSquareClick={onSquareClick}
             customSquareStyles={customSquareStyles}
             boardOrientation={userColor}
-            arePiecesDraggable={match.estado === 'in_progress' && myTurn}
+            isDraggablePiece={isDraggablePiece}
             customDarkSquareStyle={{ backgroundColor: '#09090b' }}
             customLightSquareStyle={{ backgroundColor: '#27272a' }}
             customBoardStyle={{ borderRadius: '0px' }}
