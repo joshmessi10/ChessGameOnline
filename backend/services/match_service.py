@@ -296,3 +296,30 @@ class MatchService:
             })
         return results
 
+    def get_active_matches_for_player(self, user_id: int) -> List[dict]:
+        from ..models.enums import MatchStatus
+        matches = self.match_repo.find_by_player_id(user_id)
+        results = []
+        for m in matches:
+            if m.estado == MatchStatus.IN_PROGRESS:
+                is_white = m.jugador_blancas_id == user_id
+                opponent_id = m.jugador_negras_id if is_white else m.jugador_blancas_id
+                opponent = self.user_repo.find_by_id(opponent_id)
+                
+                # Determine active turn by checking the moves count in PGN
+                moves = (m.movimientos_pgn or "").split()
+                active_color = "white" if len(moves) % 2 == 0 else "black"
+                is_my_turn = (active_color == "white" and is_white) or (active_color == "black" and not is_white)
+                
+                results.append({
+                    "id": m.id,
+                    "opponent_username": opponent.nombre_usuario if opponent else "Unknown",
+                    "modo": m.modo,
+                    "control_tiempo": m.control_tiempo,
+                    "player_color": "white" if is_white else "black",
+                    "estado": m.estado,
+                    "active_turn": active_color,
+                    "is_my_turn": is_my_turn
+                })
+        return results
+

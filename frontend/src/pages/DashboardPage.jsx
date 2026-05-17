@@ -51,9 +51,11 @@ const DashboardPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
+  const [activeMatches, setActiveMatches] = useState([]);
 
   useEffect(() => {
     api.get('/profile/me').then(r => setProfile(r.data)).catch(() => {});
+    api.get('/match/active').then(r => setActiveMatches(r.data || [])).catch(() => {});
   }, []);
 
   const stats = profile?.stats;
@@ -104,6 +106,77 @@ const DashboardPage = () => {
         <StatCard label="Total Matches" value={stats?.partidas_jugadas || 0} icon={LuHistory} />
         <StatCard label="Social Rank" value="Global" icon={LuUsers} />
       </div>
+
+      {/* Active Ongoing Games */}
+      {activeMatches.length > 0 && (
+        <div style={{ position: 'relative', zIndex: 10, marginBottom: '4rem' }}>
+          <h2 style={{ fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--text-secondary)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.8rem' }}>
+            Ongoing Battles
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {[...activeMatches]
+              .sort((a, b) => (b.is_my_turn ? 1 : 0) - (a.is_my_turn ? 1 : 0))
+              .map(m => (
+                <div key={m.id} style={{
+                  backgroundColor: 'var(--surface-color)',
+                  border: '1px solid var(--border-color)',
+                  padding: '1.5rem 2rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '2rem'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+                    <div style={{
+                      width: '12px',
+                      height: '12px',
+                      borderRadius: '50%',
+                      backgroundColor: m.is_my_turn ? 'var(--success-color)' : 'var(--error-color)',
+                      boxShadow: `0 0 10px ${m.is_my_turn ? 'var(--success-color)' : 'var(--error-color)'}`,
+                      animation: 'pulse 1.5s infinite'
+                    }} />
+                    <style>{`
+                      @keyframes pulse {
+                        0% { opacity: 0.4; }
+                        50% { opacity: 1; }
+                        100% { opacity: 0.4; }
+                      }
+                    `}</style>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                          vs {m.opponent_username}
+                        </div>
+                        <span style={{ 
+                          fontSize: '10px', 
+                          fontWeight: 800, 
+                          letterSpacing: '0.05em',
+                          color: m.is_my_turn ? 'var(--success-color)' : 'var(--error-color)',
+                          textTransform: 'uppercase',
+                          padding: '2px 8px',
+                          border: `1px solid ${m.is_my_turn ? 'var(--success-color)' : 'var(--error-color)'}`,
+                          backgroundColor: 'transparent'
+                        }}>
+                          {m.is_my_turn ? 'Your Turn' : "Opponent's Turn"}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                        Mode: <span style={{ textTransform: 'capitalize', fontWeight: 600 }}>{m.modo}</span> • Time Control: <span style={{ fontWeight: 600 }}>{m.control_tiempo}</span> • Playing as <span style={{ fontWeight: 600 }}>{m.player_color}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => navigate(`/play/${m.id}`)}
+                    className="primary-btn"
+                    style={{ padding: '8px 24px', fontSize: '13px' }}
+                  >
+                    Resume
+                  </button>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
 
       {/* Action Grid */}
       <h2 style={{ position: 'relative', zIndex: 10, fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--text-secondary)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.8rem' }}>
