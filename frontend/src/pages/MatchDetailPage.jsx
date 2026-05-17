@@ -7,7 +7,7 @@ import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 
 const MatchDetailPage = () => {
-  const { matchId } = useParams();
+  const { matchID: matchId } = useParams();
   const { user } = useAuth();
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);

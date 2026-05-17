@@ -102,7 +102,7 @@ class MatchService:
         return int(new_rw), int(new_rb), int(new_rw) - rw, int(new_rb) - rb
 
 
-    def end_match(self, match_id: int, user_id: int, request: EndMatchRequest) -> EndMatchResponse:
+    def end_match(self, match_id: int, user_id: int, request: EndMatchRequest) -> dict:
         match = self.match_repo.find_by_id(match_id)
         if not match or match.estado != MatchStatus.IN_PROGRESS:
             raise HTTPException(status_code=400, detail="Match not active")
@@ -129,15 +129,29 @@ class MatchService:
         match.finalizada_en = datetime.now(timezone.utc)
         self.match_repo.update(match)
         
-        return EndMatchResponse(
-            match_id=match.id,
-            result=match.resultado,
-            final_pgn=match.movimientos_pgn or "",
-            newELOPlayerWhite=new_rw,
-            newELOPlayerBlack=new_rb,
-            eloChangePlayerWhite=change_w,
-            eloChangePlayerBlack=change_b
-        )
+        broadcast_payload = {
+            "type": "match_ended",
+            "reason": request.reason,
+            "winner_id": match.ganador_id,
+            "resultado": match.resultado,
+            "newELOPlayerWhite": new_rw,
+            "newELOPlayerBlack": new_rb,
+            "eloChangePlayerWhite": change_w,
+            "eloChangePlayerBlack": change_b
+        }
+        
+        return {
+            "response": EndMatchResponse(
+                match_id=match.id,
+                result=match.resultado,
+                final_pgn=match.movimientos_pgn or "",
+                newELOPlayerWhite=new_rw,
+                newELOPlayerBlack=new_rb,
+                eloChangePlayerWhite=change_w,
+                eloChangePlayerBlack=change_b
+            ),
+            "broadcast_payload": broadcast_payload
+        }
 
 
     def send_invite(self, host_id: int, request: InviteRequest) -> InviteResponse:
@@ -158,7 +172,7 @@ class MatchService:
             message="Challenge sent successfully"
         )
 
-    def join_match(self, match_id: int, user_id: int) -> InviteResponse:
+    def join_match(self, match_id: int, user_id: int) -> dict:
         match = self.match_repo.find_by_id(match_id)
         if not match:
             raise HTTPException(status_code=404, detail="Invitation match not found")
@@ -170,15 +184,26 @@ class MatchService:
         match.estado = MatchStatus.IN_PROGRESS
         updated = self.match_repo.update(match)
 
-        return InviteResponse(
-            id=updated.id,
-            inviter_id=updated.jugador_blancas_id,
-            invited_id=updated.jugador_negras_id,
-            status="accepted",
-            message="Invitation accepted, match started!"
-        )
+        broadcast_payload = {
+            "type": "match_started",
+            "match_id": updated.id,
+            "board_state": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "turn": "white",
+            "match_status": "in_progress"
+        }
 
-    def decline_invite(self, match_id: int, user_id: int) -> InviteResponse:
+        return {
+            "response": InviteResponse(
+                id=updated.id,
+                inviter_id=updated.jugador_blancas_id,
+                invited_id=updated.jugador_negras_id,
+                status="accepted",
+                message="Invitation accepted, match started!"
+            ),
+            "broadcast_payload": broadcast_payload
+        }
+
+    def decline_invite(self, match_id: int, user_id: int) -> dict:
         match = self.match_repo.find_by_id(match_id)
         if not match:
             raise HTTPException(status_code=404, detail="Invitation match not found")
@@ -190,13 +215,22 @@ class MatchService:
         match.estado = MatchStatus.CANCELLED
         updated = self.match_repo.update(match)
 
-        return InviteResponse(
-            id=updated.id,
-            inviter_id=updated.jugador_blancas_id,
-            invited_id=updated.jugador_negras_id,
-            status="cancelled",
-            message="Invitation declined"
-        )
+        broadcast_payload = {
+            "type": "match_cancelled",
+            "match_id": updated.id,
+            "message": "Challenge declined"
+        }
+
+        return {
+            "response": InviteResponse(
+                id=updated.id,
+                inviter_id=updated.jugador_blancas_id,
+                invited_id=updated.jugador_negras_id,
+                status="cancelled",
+                message="Invitation declined"
+            ),
+            "broadcast_payload": broadcast_payload
+        }
 
     def _map_to_response(self, match: Match) -> MatchResponse:
         user_w = self.user_repo.find_by_id(match.jugador_blancas_id)
@@ -217,7 +251,7 @@ class MatchService:
         )
 
 
-    def make_move(self, match_id: int, user_id: int, request: MoveRequest) -> MoveResponse:
+    def make_move(self, match_id: int, user_id: int, request: MoveRequest) -> dict:
         match = self.match_repo.find_by_id(match_id)
         if not match or match.estado != MatchStatus.IN_PROGRESS:
             raise HTTPException(status_code=400, detail="Match is not active")
@@ -253,6 +287,11 @@ class MatchService:
         # Detect status
         status = ChessEngine.detect_status(result["newBoardState"])
         
+        new_elo_w = None
+        new_elo_b = None
+        change_w = 0
+        change_b = 0
+
         if status["isCheckmate"]:
             match.estado = MatchStatus.FINISHED
             match.finalizada_en = datetime.now(timezone.utc)
@@ -262,22 +301,46 @@ class MatchService:
             else:
                 match.resultado = MatchResult.BLACK_WIN
                 match.ganador_id = match.jugador_negras_id
-            self._finalize_match_ratings_and_stats(match, match.resultado)
+            new_elo_w, new_elo_b, change_w, change_b = self._finalize_match_ratings_and_stats(match, match.resultado)
         elif status["isDraw"]:
             match.estado = MatchStatus.FINISHED
             match.finalizada_en = datetime.now(timezone.utc)
             match.resultado = MatchResult.DRAW
-            self._finalize_match_ratings_and_stats(match, match.resultado)
+            new_elo_w, new_elo_b, change_w, change_b = self._finalize_match_ratings_and_stats(match, match.resultado)
             
         self.match_repo.update(match)
         
-        return MoveResponse(
-            success=True,
-            move=san_move,
-            board_state=result["newBoardState"],
-            is_checkmate=status["isCheckmate"],
-            is_draw=status["isDraw"]
-        )
+        # Prepare broadcast payload
+        fen_parts = result["newBoardState"].split()
+        next_turn = "white" if len(fen_parts) > 1 and fen_parts[1] == "w" else "black"
+        
+        broadcast_payload = {
+            "type": "move_made",
+            "move": san_move,
+            "board_state": result["newBoardState"],
+            "is_checkmate": status["isCheckmate"],
+            "is_draw": status["isDraw"],
+            "turn": next_turn,
+            "match_status": match.estado,
+            "winner_id": match.ganador_id,
+            "resultado": match.resultado,
+            "movimientos_pgn": match.movimientos_pgn,
+            "newELOPlayerWhite": new_elo_w,
+            "newELOPlayerBlack": new_elo_b,
+            "eloChangePlayerWhite": change_w,
+            "eloChangePlayerBlack": change_b
+        }
+        
+        return {
+            "response": MoveResponse(
+                success=True,
+                move=san_move,
+                board_state=result["newBoardState"],
+                is_checkmate=status["isCheckmate"],
+                is_draw=status["isDraw"]
+            ),
+            "broadcast_payload": broadcast_payload
+        }
 
     def get_pending_invites(self, user_id: int) -> List[dict]:
         invites = self.match_repo.find_pending_invites_by_guest_id(user_id)
