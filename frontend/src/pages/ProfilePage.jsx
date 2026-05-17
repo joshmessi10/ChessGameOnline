@@ -4,20 +4,21 @@ import api from '../api/auth';
 import { LuTrophy, LuTrendingUp, LuHistory, LuUser, LuMapPin, LuCalendar, LuExternalLink } from 'react-icons/lu';
 
 const ProfilePage = () => {
-  const { userId } = useParams();
+  const { userID, userId } = useParams();
+  const resolvedId = userID || userId;
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async () => {
     try {
-      const endpoint = userId ? `/profile/${userId}` : '/profile/me';
+      const endpoint = resolvedId && resolvedId !== 'me' ? `/profile/${resolvedId}` : '/profile/me';
       const { data } = await api.get(endpoint);
       setProfile(data);
     } catch { }
     setLoading(false);
   };
 
-  useEffect(() => { fetchProfile(); }, [userId]);
+  useEffect(() => { fetchProfile(); }, [resolvedId]);
 
   if (loading) return (
     <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
@@ -53,20 +54,42 @@ const ProfilePage = () => {
         </div>
         
         <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem' }}>
-            <div>
-              <h1 style={{ fontSize: '3.5rem', marginBottom: '0.2rem' }}>{profile.nombre_usuario}</h1>
-              <div style={{ display: 'flex', gap: '1.5rem', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><LuMapPin size={14} /> {profile.pais || 'Global'}</span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><LuCalendar size={14} /> Joined {new Date().getFullYear()}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <h1 style={{ fontSize: '3.5rem', marginBottom: '0.2rem' }}>{profile.nombre_usuario}</h1>
+                <div style={{ display: 'flex', gap: '1.5rem', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><LuMapPin size={14} /> {profile.pais || 'Global'}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><LuCalendar size={14} /> Joined {new Date().getFullYear()}</span>
+                </div>
               </div>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', color: '#f59e0b', letterSpacing: '0.1em', marginBottom: '4px' }}>Global Rating</div>
-              <div style={{ fontSize: '42px', fontWeight: 900, lineHeight: 1 }}>{profile.userELO || 1200}</div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+              {[
+                { label: 'Bullet', val: profile.bulletELO || 1200 },
+                { label: 'Blitz', val: profile.blitzELO || 1200 },
+                { label: 'Rapid', val: profile.rapidELO || 1200 },
+                { label: 'Classical', val: profile.classicalELO || 1200 },
+              ].map((m, idx) => (
+                <div key={idx} style={{ 
+                  backgroundColor: 'var(--surface-color)', 
+                  border: '1px solid var(--border-color)', 
+                  padding: '12px', 
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '4px', letterSpacing: '0.05em' }}>
+                    {m.label}
+                  </div>
+                  <div style={{ fontSize: '20px', fontWeight: 900, color: '#f59e0b' }}>
+                    {m.val}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
+
       </div>
 
       {/* Stats Summary */}

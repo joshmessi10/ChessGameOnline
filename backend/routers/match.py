@@ -23,6 +23,17 @@ async def get_match(matchID: int, session: SessionDep):
 @router.post("/{matchID}/move", response_model=MoveResponse)
 async def make_move(matchID: int, request: MoveRequest, session: SessionDep, current_user: CurrentUserDep):
     service = MatchService(session)
+    from ..repositories.rating_repository import RatingRepository
+    rating_repo = RatingRepository(session)
+    match_preview = service.match_repo.find_by_id(matchID)
+    old_elo_w = 1200
+    old_elo_b = 1200
+    if match_preview:
+        rw_old = rating_repo.find_by_usuario_and_modo(match_preview.jugador_blancas_id, match_preview.modo)
+        rb_old = rating_repo.find_by_usuario_and_modo(match_preview.jugador_negras_id, match_preview.modo)
+        old_elo_w = rw_old.rating if rw_old else 1200
+        old_elo_b = rb_old.rating if rb_old else 1200
+
     response = service.make_move(matchID, current_user.id, request)
     
     # Broadcast move to both players in real time
@@ -33,14 +44,16 @@ async def make_move(matchID: int, request: MoveRequest, session: SessionDep, cur
     
     new_elo_w = None
     new_elo_b = None
+    change_w = 0
+    change_b = 0
     from ..models.enums import MatchStatus
     if match.estado == MatchStatus.FINISHED:
-        from ..repositories.rating_repository import RatingRepository
-        rating_repo = RatingRepository(session)
         rw_obj = rating_repo.find_by_usuario_and_modo(match.jugador_blancas_id, match.modo)
         rb_obj = rating_repo.find_by_usuario_and_modo(match.jugador_negras_id, match.modo)
         new_elo_w = rw_obj.rating if rw_obj else 1200
         new_elo_b = rb_obj.rating if rb_obj else 1200
+        change_w = new_elo_w - old_elo_w
+        change_b = new_elo_b - old_elo_b
     
     await websocket_manager.broadcast_to_match(matchID, {
         "type": "move_made",
@@ -54,8 +67,11 @@ async def make_move(matchID: int, request: MoveRequest, session: SessionDep, cur
         "resultado": match.resultado,
         "movimientos_pgn": match.movimientos_pgn,
         "newELOPlayerWhite": new_elo_w,
-        "newELOPlayerBlack": new_elo_b
+        "newELOPlayerBlack": new_elo_b,
+        "eloChangePlayerWhite": change_w,
+        "eloChangePlayerBlack": change_b
     })
+
     
     return response
 
@@ -69,13 +85,16 @@ async def end_match(matchID: int, request: EndMatchRequest, session: SessionDep,
     await websocket_manager.broadcast_to_match(matchID, {
         "type": "match_ended",
         "reason": request.reason,
-        "winner_id": match.ganador_id,
-        "resultado": match.resultado,
+        "winner_id": match.ganador_id if match else None,
+        "resultado": match.resultado if match else response.result,
         "newELOPlayerWhite": response.newELOPlayerWhite,
-        "newELOPlayerBlack": response.newELOPlayerBlack
+        "newELOPlayerBlack": response.newELOPlayerBlack,
+        "eloChangePlayerWhite": response.eloChangePlayerWhite,
+        "eloChangePlayerBlack": response.eloChangePlayerBlack
     })
     
     return response
+
 
 @router.post("/invite", response_model=InviteResponse)
 async def send_invite(request: InviteRequest, session: SessionDep, current_user: CurrentUserDep):
@@ -142,7 +161,18 @@ async def match_websocket(websocket: WebSocket, matchID: int, session: Session =
                         "username": user.nombre_usuario,
                         "message": msg.get("message")
                     })
+                elif msg.get("type") == "draw_offer":
+                    await websocket_manager.broadcast_to_match(matchID, {
+                        "type": "draw_offer",
+                        "offered_by": user.nombre_usuario
+                    })
+                elif msg.get("type") == "draw_declined":
+                    await websocket_manager.broadcast_to_match(matchID, {
+                        "type": "draw_declined",
+                        "declined_by": user.nombre_usuario
+                    })
             except Exception:
                 pass
+
     except WebSocketDisconnect:
         websocket_manager.disconnect(matchID, websocket)

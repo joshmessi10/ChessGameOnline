@@ -99,7 +99,8 @@ class MatchService:
         self.stats_repo.update(stats_w)
         self.stats_repo.update(stats_b)
         
-        return int(new_rw), int(new_rb)
+        return int(new_rw), int(new_rb), int(new_rw) - rw, int(new_rb) - rb
+
 
     def end_match(self, match_id: int, user_id: int, request: EndMatchRequest) -> EndMatchResponse:
         match = self.match_repo.find_by_id(match_id)
@@ -122,7 +123,7 @@ class MatchService:
             result = MatchResult.DRAW
             match.resultado = MatchResult.DRAW
 
-        new_rw, new_rb = self._finalize_match_ratings_and_stats(match, result)
+        new_rw, new_rb, change_w, change_b = self._finalize_match_ratings_and_stats(match, result)
             
         match.estado = MatchStatus.FINISHED
         match.finalizada_en = datetime.now(timezone.utc)
@@ -133,8 +134,11 @@ class MatchService:
             result=match.resultado,
             final_pgn=match.movimientos_pgn or "",
             newELOPlayerWhite=new_rw,
-            newELOPlayerBlack=new_rb
+            newELOPlayerBlack=new_rb,
+            eloChangePlayerWhite=change_w,
+            eloChangePlayerBlack=change_b
         )
+
 
     def send_invite(self, host_id: int, request: InviteRequest) -> InviteResponse:
         # Mocking invite creation (could be a table, but for now we create a WAITING match)

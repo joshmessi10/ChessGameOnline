@@ -43,3 +43,6 @@ class EndMatchResponse(BaseModel):
     final_pgn: str
     newELOPlayerWhite: int
     newELOPlayerBlack: int
+    eloChangePlayerWhite: int = 0
+    eloChangePlayerBlack: int = 0
+

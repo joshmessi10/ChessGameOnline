@@ -33,6 +33,7 @@ def run_tests():
     session.execute(text("DELETE FROM partidas"))
     session.execute(text("DELETE FROM usuarios"))
     session.execute(text("DELETE FROM estadisticas"))
+    session.execute(text("DELETE FROM ratings"))
     session.commit()
     
     user1 = Usuario(nombre_usuario="Magnus", correo="magnus@chess.com", hash_contrasena="pwd")

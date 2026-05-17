@@ -39,9 +39,14 @@ class UserResponse(BaseModel):
     pais: Optional[str]
     creado_en: datetime
     userELO: int = 1200
+    bulletELO: int = 1200
+    blitzELO: int = 1200
+    rapidELO: int = 1200
+    classicalELO: int = 1200
     stats: Optional[StatsDTO]
     friendList: List[FriendListItemDTO] = []
     matchHistory: List[MatchHistoryItemDTO] = []
+
 
 class UserSearchResponse(BaseModel):
     results: List[UserResult]

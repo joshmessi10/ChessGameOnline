@@ -23,6 +23,11 @@ const GamePage = () => {
   const [chatInput, setChatInput] = useState('');
   const chatEndRef = useRef(null);
 
+  // Draw and Resign Custom Overlay states
+  const [overlayState, setOverlayState] = useState(null); // 'confirm_resign', 'draw_offered', 'draw_sent'
+  const [drawOfferFrom, setDrawOfferFrom] = useState('');
+
+
   const wsRef = useRef(null);
   const [selectedSquare, setSelectedSquare] = useState(null);
   const [customSquareStyles, setCustomSquareStyles] = useState({});
@@ -55,19 +60,21 @@ const GamePage = () => {
       setMoveCount(moves.length);
 
       // Fetch player profiles to display correct names and ratings
+      const modeQuery = matchData.modo ? `?modo=${matchData.modo}` : '';
       try {
-        const whiteRes = await api.get(`/profile/${matchData.jugador_blancas_id}`);
+        const whiteRes = await api.get(`/profile/${matchData.jugador_blancas_id}${modeQuery}`);
         setWhitePlayer(whiteRes.data);
       } catch (e) {
         setWhitePlayer({ nombre_usuario: 'White Player', userELO: 1200 });
       }
 
       try {
-        const blackRes = await api.get(`/profile/${matchData.jugador_negras_id}`);
+        const blackRes = await api.get(`/profile/${matchData.jugador_negras_id}${modeQuery}`);
         setBlackPlayer(blackRes.data);
       } catch (e) {
         setBlackPlayer({ nombre_usuario: 'Black Player', userELO: 1200 });
       }
+
 
       setLoading(false);
     } catch (err) {
@@ -115,9 +122,7 @@ const GamePage = () => {
         if (data.match_status === 'finished') {
           // If match finished from checkmate or draw
           const isWhite = user?.id === match.jugador_blancas_id;
-          const newElo = isWhite ? data.newELOPlayerWhite : data.newELOPlayerBlack;
-          const oldElo = isWhite ? whitePlayer.userELO : blackPlayer.userELO;
-          const eloDiff = newElo && oldElo ? (newElo - oldElo) : (data.winner_id === user?.id ? 15 : (data.winner_id ? -15 : 0));
+          const eloDiff = isWhite ? data.eloChangePlayerWhite : data.eloChangePlayerBlack;
           
           setTimeout(() => {
             navigate('/result', { 
@@ -141,10 +146,7 @@ const GamePage = () => {
 
         // Handle resignation/draw agreement
         const isWhite = user?.id === match.jugador_blancas_id;
-        const newElo = isWhite ? data.newELOPlayerWhite : data.newELOPlayerBlack;
-        const oldElo = isWhite ? whitePlayer.userELO : blackPlayer.userELO;
-        const isWinner = data.winner_id === user?.id;
-        const eloDiff = newElo && oldElo ? (newElo - oldElo) : (data.resultado === 'draw' ? 0 : (isWinner ? 16 : -16));
+        const eloDiff = isWhite ? data.eloChangePlayerWhite : data.eloChangePlayerBlack;
         
         navigate('/result', {
           state: {
@@ -155,8 +157,18 @@ const GamePage = () => {
             eloDiff
           }
         });
-      }
- else if (data.type === 'chat') {
+      } else if (data.type === 'draw_offer') {
+        if (data.offered_by !== (user?.nombre_usuario || user?.username)) {
+          setDrawOfferFrom(data.offered_by);
+          setOverlayState('draw_offered');
+        }
+      } else if (data.type === 'draw_declined') {
+        if (data.declined_by !== (user?.nombre_usuario || user?.username)) {
+          alert(`Your draw offer was declined by ${data.declined_by}.`);
+          setOverlayState(null);
+        }
+      } else if (data.type === 'chat') {
+
         setMessages(prev => [...prev, { username: data.username, message: data.message }]);
       }
     };
@@ -335,18 +347,51 @@ const GamePage = () => {
     return (pieceColor === 'w' && userColor === 'white') || (pieceColor === 'b' && userColor === 'black');
   };
 
-  // Handle resign
-  const handleResign = async () => {
+  // Triggers custom resignation overlay
+  const handleResign = () => {
     if (!match || match.estado !== 'in_progress') return;
-    if (!confirm("Are you sure you want to resign?")) return;
+    setOverlayState('confirm_resign');
+  };
 
+  // Executes resignation call to backend
+  const executeResign = async () => {
+    setOverlayState(null);
     try {
-      await api.put(`/match/${matchId}/end`, { reason: 'victory' });
+      await api.put(`/match/${matchId}/end`, { reason: 'resignation' });
     } catch (err) {
       console.error(err);
       alert("Failed to resign.");
     }
   };
+
+  // Triggers draw offer via WebSocket
+  const handleOfferDraw = () => {
+    if (!match || match.estado !== 'in_progress') return;
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'draw_offer' }));
+      setOverlayState('draw_sent');
+    }
+  };
+
+  // Accepts draw offer, calls backend to end match as draw agreement
+  const handleAcceptDraw = async () => {
+    setOverlayState(null);
+    try {
+      await api.put(`/match/${matchId}/end`, { reason: 'draw_agreement' });
+    } catch (err) {
+      console.error(err);
+      alert("Failed to agree on draw.");
+    }
+  };
+
+  // Declines draw offer or cancels draw offer, sends WS event to other player
+  const handleDeclineDraw = () => {
+    setOverlayState(null);
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'draw_declined' }));
+    }
+  };
+
 
   // Send chat message
   const handleSendChat = (e) => {
@@ -449,13 +494,65 @@ const GamePage = () => {
   }
 
   return (
-
     <div style={{ 
       maxWidth: '1200px', margin: '0 auto', padding: '2rem',
       display: 'grid', gridTemplateColumns: 'minmax(400px, 600px) 1fr', gap: '3rem',
       position: 'relative'
     }}>
       
+      {overlayState && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+          backgroundColor: 'rgba(9, 9, 11, 0.85)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100
+        }}>
+          <div style={{
+            backgroundColor: 'var(--surface-color)', border: '1px solid var(--border-color)',
+            padding: '2.5rem', maxWidth: '400px', width: '100%', textAlign: 'center',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.6)', display: 'flex', flexDirection: 'column', gap: '1.5rem'
+          }}>
+            {overlayState === 'confirm_resign' && (
+              <>
+                <div style={{ fontSize: '48px' }}>🏳️</div>
+                <div>
+                  <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '0.5rem' }}>Resign Match?</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>You will lose ELO rating points immediately.</p>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <button onClick={() => setOverlayState(null)} className="secondary-btn" style={{ padding: '10px' }}>Cancel</button>
+                  <button onClick={executeResign} className="primary-btn" style={{ padding: '10px', backgroundColor: 'var(--error-color)', borderColor: 'var(--error-color)', color: '#fff' }}>Resign</button>
+                </div>
+              </>
+            )}
+            {overlayState === 'draw_offered' && (
+              <>
+                <div style={{ fontSize: '48px' }}>🤝</div>
+                <div>
+                  <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '0.5rem' }}>Draw Offered</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
+                    <strong style={{ color: 'var(--text-primary)' }}>{drawOfferFrom}</strong> has offered a draw agreement.
+                  </p>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <button onClick={handleDeclineDraw} className="secondary-btn" style={{ padding: '10px', color: 'var(--error-color)' }}>Decline</button>
+                  <button onClick={handleAcceptDraw} className="primary-btn" style={{ padding: '10px' }}>Accept 🤝</button>
+                </div>
+              </>
+            )}
+            {overlayState === 'draw_sent' && (
+              <>
+                <div style={{ fontSize: '48px', animation: 'pulse 1.5s infinite' }}>⌛</div>
+                <div>
+                  <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '0.5rem' }}>Draw Offer Sent</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Waiting for opponent to accept or decline the offer...</p>
+                </div>
+                <button onClick={handleDeclineDraw} className="secondary-btn" style={{ padding: '10px', color: 'var(--error-color)' }}>Cancel Offer</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Chessboard Area */}
       <div>
         <PlayerInfo player={opponent} />
@@ -538,6 +635,7 @@ const GamePage = () => {
         {/* Interaction Bar */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', backgroundColor: 'var(--border-color)', border: '1px solid var(--border-color)' }}>
           <button 
+            onClick={handleOfferDraw}
             disabled={match.estado !== 'in_progress'}
             style={{ backgroundColor: 'var(--surface-color)', padding: '1rem', color: match.estado === 'in_progress' ? 'var(--text-primary)' : 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer' }}
           >
@@ -551,6 +649,7 @@ const GamePage = () => {
             <LuFlag size={16} /> Resign
           </button>
         </div>
+
 
         <button 
           onClick={() => setShowChat(true)}

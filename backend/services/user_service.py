@@ -17,7 +17,7 @@ class UserService:
         self.match_repo = MatchRepository(session)
         self.rating_repo = RatingRepository(session)
 
-    def get_profile(self, user_id: int) -> UserResponse:
+    def get_profile(self, user_id: int, modo: Optional[MatchType] = None) -> UserResponse:
         user = self.user_repo.find_by_id(user_id)
         if not user:
             from fastapi import HTTPException
@@ -34,8 +34,14 @@ class UserService:
                 actualizado_en=stats.actualizado_en
             )
             
-        # Get ELO (Blitz as default for profile)
-        rating = self.rating_repo.find_by_usuario_and_modo(user_id, MatchType.BLITZ)
+        # Get ELO per mode
+        bullet_r = self.rating_repo.find_by_usuario_and_modo(user_id, MatchType.BULLET)
+        blitz_r = self.rating_repo.find_by_usuario_and_modo(user_id, MatchType.BLITZ)
+        rapid_r = self.rating_repo.find_by_usuario_and_modo(user_id, MatchType.RAPID)
+        classical_r = self.rating_repo.find_by_usuario_and_modo(user_id, MatchType.CLASSICAL)
+        
+        target_modo = modo if modo else MatchType.BLITZ
+        rating = self.rating_repo.find_by_usuario_and_modo(user_id, target_modo)
         user_elo = rating.rating if rating else 1200
         
         # Get Friends
@@ -78,6 +84,10 @@ class UserService:
             pais=user.pais,
             creado_en=user.creado_en,
             userELO=user_elo,
+            bulletELO=bullet_r.rating if bullet_r else 1200,
+            blitzELO=blitz_r.rating if blitz_r else 1200,
+            rapidELO=rapid_r.rating if rapid_r else 1200,
+            classicalELO=classical_r.rating if classical_r else 1200,
             stats=stats_dto,
             friendList=friends_data,
             matchHistory=history
@@ -85,15 +95,18 @@ class UserService:
 
     def search_users(self, query: str) -> UserSearchResponse:
         users = self.user_repo.search_users(query)
-        results = [
-            UserResult(
+        results = []
+        for u in users:
+            blitz_r = self.rating_repo.find_by_usuario_and_modo(u.id, MatchType.BLITZ)
+            results.append(UserResult(
                 id=u.id,
                 nombre_usuario=u.nombre_usuario,
                 url_avatar=u.url_avatar,
-                pais=u.pais
-            ) for u in users
-        ]
+                pais=u.pais,
+                userELO=blitz_r.rating if blitz_r else 1200
+            ))
         return UserSearchResponse(results=results)
+
 
     def update_settings(self, user_id: int, settings: SettingsDTO) -> UserResponse:
         user = self.user_repo.find_by_id(user_id)
