@@ -93,11 +93,10 @@ const GamePage = () => {
     if (loading || !match) return;
 
     const token = localStorage.getItem('token');
-    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsHost = window.location.host === 'localhost:5173' || window.location.host === '127.0.0.1:5173'
-      ? 'localhost:8000'
-      : window.location.host;
-    const wsUrl = `${wsProto}//${wsHost}/api/match/${matchId}/ws?token=${token}`;
+    // Derive WS URL from the same base as REST. VITE_API_URL = "https://…/api" or "http://localhost:8000/api"
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+    const wsBase = apiBase.replace(/^http/, 'ws').replace(/\/api$/, '');
+    const wsUrl = `${wsBase}/api/match/${matchId}/ws?token=${token}`;
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
