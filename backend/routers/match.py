@@ -25,6 +25,17 @@ async def make_move(matchID: int, request: MoveRequest, session: SessionDep, cur
     
     match = service.match_repo.find_by_id(matchID)
     
+    new_elo_w = None
+    new_elo_b = None
+    from ..models.enums import MatchStatus
+    if match.estado == MatchStatus.FINISHED:
+        from ..repositories.rating_repository import RatingRepository
+        rating_repo = RatingRepository(session)
+        rw_obj = rating_repo.find_by_usuario_and_modo(match.jugador_blancas_id, match.modo)
+        rb_obj = rating_repo.find_by_usuario_and_modo(match.jugador_negras_id, match.modo)
+        new_elo_w = rw_obj.rating if rw_obj else 1200
+        new_elo_b = rb_obj.rating if rb_obj else 1200
+    
     await websocket_manager.broadcast_to_match(matchID, {
         "type": "move_made",
         "move": response.move,
@@ -35,7 +46,9 @@ async def make_move(matchID: int, request: MoveRequest, session: SessionDep, cur
         "match_status": match.estado,
         "winner_id": match.ganador_id,
         "resultado": match.resultado,
-        "movimientos_pgn": match.movimientos_pgn
+        "movimientos_pgn": match.movimientos_pgn,
+        "newELOPlayerWhite": new_elo_w,
+        "newELOPlayerBlack": new_elo_b
     })
     
     return response

@@ -38,3 +38,5 @@ class EndMatchResponse(BaseModel):
     match_id: int
     result: MatchResult
     final_pgn: str
+    newELOPlayerWhite: int
+    newELOPlayerBlack: int

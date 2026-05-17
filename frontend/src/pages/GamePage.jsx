@@ -114,13 +114,17 @@ const GamePage = () => {
 
         if (data.match_status === 'finished') {
           // If match finished from checkmate or draw
-          const eloDiff = user?.id === data.winner_id ? 15 : (data.winner_id ? -15 : 0);
+          const isWhite = user?.id === match.jugador_blancas_id;
+          const newElo = isWhite ? data.newELOPlayerWhite : data.newELOPlayerBlack;
+          const oldElo = isWhite ? whitePlayer.userELO : blackPlayer.userELO;
+          const eloDiff = newElo && oldElo ? (newElo - oldElo) : (data.winner_id === user?.id ? 15 : (data.winner_id ? -15 : 0));
+          
           setTimeout(() => {
             navigate('/result', { 
               state: { 
                 matchData: { 
                   resultado: data.resultado, 
-                  color_usuario: user?.id === match.jugador_blancas_id ? 'white' : 'black' 
+                  color_usuario: isWhite ? 'white' : 'black' 
                 }, 
                 eloDiff 
               } 
@@ -129,20 +133,23 @@ const GamePage = () => {
         }
       } else if (data.type === 'match_ended') {
         // Handle resignation/draw agreement
-        const userColor = user?.id === match.jugador_blancas_id ? 'white' : 'black';
+        const isWhite = user?.id === match.jugador_blancas_id;
+        const newElo = isWhite ? data.newELOPlayerWhite : data.newELOPlayerBlack;
+        const oldElo = isWhite ? whitePlayer.userELO : blackPlayer.userELO;
         const isWinner = data.winner_id === user?.id;
-        const eloDiff = data.resultado === 'draw' ? 0 : (isWinner ? 16 : -16);
+        const eloDiff = newElo && oldElo ? (newElo - oldElo) : (data.resultado === 'draw' ? 0 : (isWinner ? 16 : -16));
         
         navigate('/result', {
           state: {
             matchData: {
               resultado: data.resultado,
-              color_usuario: userColor
+              color_usuario: isWhite ? 'white' : 'black'
             },
             eloDiff
           }
         });
-      } else if (data.type === 'chat') {
+      }
+ else if (data.type === 'chat') {
         setMessages(prev => [...prev, { username: data.username, message: data.message }]);
       }
     };

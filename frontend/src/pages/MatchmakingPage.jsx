@@ -54,7 +54,7 @@ const MatchmakingPage = () => {
           const { data } = await api.get('/matchmaking/status');
           if (data.matchID) {
             stopSearch();
-            navigate(`/play`);
+            navigate(`/play/${data.matchID}`);
           }
         } catch {}
       }, 3000);

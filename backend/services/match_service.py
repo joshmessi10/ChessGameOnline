@@ -25,12 +25,9 @@ class MatchService:
             raise HTTPException(status_code=404, detail="Match not found")
         return self._map_to_response(match)
 
-    def end_match(self, match_id: int, user_id: int, request: EndMatchRequest) -> EndMatchResponse:
-        match = self.match_repo.find_by_id(match_id)
-        if not match or match.estado != MatchStatus.IN_PROGRESS:
-            raise HTTPException(status_code=400, detail="Match not active")
-            
-        # Basic ELO Logic (simplified)
+    def _finalize_match_ratings_and_stats(self, match: Match, result: MatchResult) -> tuple:
+        from ..models.statistics import Statistics
+        # Basic ELO Logic
         k = 32
         white_rating = self.rating_repo.find_by_usuario_and_modo(match.jugador_blancas_id, match.modo)
         black_rating = self.rating_repo.find_by_usuario_and_modo(match.jugador_negras_id, match.modo)
@@ -42,27 +39,87 @@ class MatchService:
         eb = 1 / (1 + 10 ** ((rw - rb) / 400))
         
         # Determine actual scores
-        sw, sb = 0.5, 0.5
-        if request.reason == "victory":
-            if user_id == match.jugador_blancas_id:
-                sw, sb = 1, 0
-                match.resultado = MatchResult.WHITE_WIN
-                match.ganador_id = match.jugador_blancas_id
-            else:
-                sw, sb = 0, 1
-                match.resultado = MatchResult.BLACK_WIN
-                match.ganador_id = match.jugador_negras_id
-        
+        if result == MatchResult.WHITE_WIN:
+            sw, sb = 1, 0
+        elif result == MatchResult.BLACK_WIN:
+            sw, sb = 0, 1
+        else: # DRAW
+            sw, sb = 0.5, 0.5
+            
         new_rw = rw + k * (sw - ew)
         new_rb = rb + k * (sb - eb)
         
-        # Update ratings
+        # Update ratings in DB
         if white_rating:
             white_rating.rating = int(new_rw)
             self.rating_repo.update(white_rating)
+        else:
+            from ..models.rating import Rating
+            white_rating = Rating(usuario_id=match.jugador_blancas_id, modo=match.modo, rating=int(new_rw))
+            self.rating_repo.save(white_rating)
+            
         if black_rating:
             black_rating.rating = int(new_rb)
             self.rating_repo.update(black_rating)
+        else:
+            from ..models.rating import Rating
+            black_rating = Rating(usuario_id=match.jugador_negras_id, modo=match.modo, rating=int(new_rb))
+            self.rating_repo.save(black_rating)
+
+        # Update career statistics in DB
+        stats_w = self.stats_repo.find_by_usuario_id(match.jugador_blancas_id)
+        if not stats_w:
+            stats_w = Statistics(usuario_id=match.jugador_blancas_id)
+            stats_w = self.stats_repo.save(stats_w)
+            
+        stats_b = self.stats_repo.find_by_usuario_id(match.jugador_negras_id)
+        if not stats_b:
+            stats_b = Statistics(usuario_id=match.jugador_negras_id)
+            stats_b = self.stats_repo.save(stats_b)
+
+        stats_w.partidas_jugadas += 1
+        stats_b.partidas_jugadas += 1
+        
+        if result == MatchResult.WHITE_WIN:
+            stats_w.victorias += 1
+            stats_b.derrotas += 1
+        elif result == MatchResult.BLACK_WIN:
+            stats_b.victorias += 1
+            stats_w.derrotas += 1
+        elif result == MatchResult.DRAW:
+            stats_w.empates += 1
+            stats_b.empates += 1
+
+        stats_w.actualizado_en = datetime.now(timezone.utc)
+        stats_b.actualizado_en = datetime.now(timezone.utc)
+        
+        self.stats_repo.update(stats_w)
+        self.stats_repo.update(stats_b)
+        
+        return int(new_rw), int(new_rb)
+
+    def end_match(self, match_id: int, user_id: int, request: EndMatchRequest) -> EndMatchResponse:
+        match = self.match_repo.find_by_id(match_id)
+        if not match or match.estado != MatchStatus.IN_PROGRESS:
+            raise HTTPException(status_code=400, detail="Match not active")
+            
+        # Determine match result based on user resigning or drawing
+        if request.reason in ("victory", "resignation"):
+            if user_id == match.jugador_blancas_id:
+                # White resigned -> Black wins
+                result = MatchResult.BLACK_WIN
+                match.resultado = MatchResult.BLACK_WIN
+                match.ganador_id = match.jugador_negras_id
+            else:
+                # Black resigned -> White wins
+                result = MatchResult.WHITE_WIN
+                match.resultado = MatchResult.WHITE_WIN
+                match.ganador_id = match.jugador_blancas_id
+        else:
+            result = MatchResult.DRAW
+            match.resultado = MatchResult.DRAW
+
+        new_rw, new_rb = self._finalize_match_ratings_and_stats(match, result)
             
         match.estado = MatchStatus.FINISHED
         match.finalizada_en = datetime.now(timezone.utc)
@@ -72,8 +129,8 @@ class MatchService:
             match_id=match.id,
             result=match.resultado,
             final_pgn=match.movimientos_pgn or "",
-            newELOPlayerWhite=int(new_rw),
-            newELOPlayerBlack=int(new_rb)
+            newELOPlayerWhite=new_rw,
+            newELOPlayerBlack=new_rb
         )
 
     def send_invite(self, host_id: int, request: InviteRequest) -> InviteResponse:
@@ -92,6 +149,46 @@ class MatchService:
             invited_id=request.friend_id,
             status="pending",
             message="Challenge sent successfully"
+        )
+
+    def join_match(self, match_id: int, user_id: int) -> InviteResponse:
+        match = self.match_repo.find_by_id(match_id)
+        if not match:
+            raise HTTPException(status_code=404, detail="Invitation match not found")
+        if match.estado != MatchStatus.WAITING:
+            raise HTTPException(status_code=400, detail="Match is already in progress, finished, or cancelled")
+        if match.jugador_negras_id != user_id:
+            raise HTTPException(status_code=403, detail="You are not the guest of this invitation")
+
+        match.estado = MatchStatus.IN_PROGRESS
+        updated = self.match_repo.update(match)
+
+        return InviteResponse(
+            id=updated.id,
+            inviter_id=updated.jugador_blancas_id,
+            invited_id=updated.jugador_negras_id,
+            status="accepted",
+            message="Invitation accepted, match started!"
+        )
+
+    def decline_invite(self, match_id: int, user_id: int) -> InviteResponse:
+        match = self.match_repo.find_by_id(match_id)
+        if not match:
+            raise HTTPException(status_code=404, detail="Invitation match not found")
+        if match.estado != MatchStatus.WAITING:
+            raise HTTPException(status_code=400, detail="Match is already in progress, finished, or cancelled")
+        if match.jugador_negras_id != user_id:
+            raise HTTPException(status_code=403, detail="You are not the guest of this invitation")
+
+        match.estado = MatchStatus.CANCELLED
+        updated = self.match_repo.update(match)
+
+        return InviteResponse(
+            id=updated.id,
+            inviter_id=updated.jugador_blancas_id,
+            invited_id=updated.jugador_negras_id,
+            status="cancelled",
+            message="Invitation declined"
         )
 
     def _map_to_response(self, match: Match) -> MatchResponse:
@@ -153,10 +250,12 @@ class MatchService:
             else:
                 match.resultado = MatchResult.BLACK_WIN
                 match.ganador_id = match.jugador_negras_id
+            self._finalize_match_ratings_and_stats(match, match.resultado)
         elif status["isDraw"]:
             match.estado = MatchStatus.FINISHED
             match.finalizada_en = datetime.now(timezone.utc)
             match.resultado = MatchResult.DRAW
+            self._finalize_match_ratings_and_stats(match, match.resultado)
             
         self.match_repo.update(match)
         

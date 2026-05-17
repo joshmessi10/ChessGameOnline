@@ -19,10 +19,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize database
+import asyncio
+from sqlmodel import Session
+from .database import engine
+from .services.matchmaking_service import MatchmakingService
+from .models.enums import MatchType
+
+async def matchmaking_worker():
+    while True:
+        try:
+            await asyncio.sleep(3)
+            with Session(engine) as session:
+                service = MatchmakingService(session)
+                for mode in MatchType:
+                    matched = service.try_match_players(mode)
+                    if matched:
+                        print(f"[Matchmaker] Matched game {matched['match_id']} for mode {mode.value}")
+        except Exception as e:
+            print(f"[Matchmaker Error] {e}")
+
+# Initialize database and background workers
 @app.on_event("startup")
-def on_startup():
+async def on_startup():
     create_db_and_tables()
+    asyncio.create_task(matchmaking_worker())
 
 # Include Routers
 app.include_router(auth.router)

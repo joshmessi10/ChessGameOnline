@@ -69,7 +69,7 @@ const FriendsPage = () => {
   };
 
   const rejectRequest = async (id) => {
-    try { await api.delete(`/friends/reject?targetID=${id}`); fetchFriends(); }
+    try { await api.delete(`/friends/${id}/reject`); fetchFriends(); }
     catch { alert('Reject failed.'); }
   };
 

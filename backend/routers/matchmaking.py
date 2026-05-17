@@ -16,5 +16,6 @@ async def leave_queue(session: SessionDep, current_user: CurrentUserDep):
     return service.leave_queue(current_user.id)
 
 @router.get("/status")
-async def get_status(current_user: CurrentUserDep):
-    return {"status": "searching", "user_id": current_user.id}
+async def get_status(session: SessionDep, current_user: CurrentUserDep):
+    service = MatchmakingService(session)
+    return service.get_status(current_user.id)
