@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/auth';
 import { useAuth } from '../context/AuthContext';
-import { LuArrowLeft, LuFileText, LuUser, LuCalendar, LuTrophy, LuInfo } from 'react-icons/lu';
+import { LuArrowLeft, LuFileText, LuUser, LuCalendar, LuTrophy, LuInfo, LuChevronLeft, LuChevronRight, LuChevronsLeft, LuChevronsRight } from 'react-icons/lu';
+import { Chess } from 'chess.js';
+import { Chessboard } from 'react-chessboard';
 
 const MatchDetailPage = () => {
   const { matchId } = useParams();
@@ -17,6 +19,36 @@ const MatchDetailPage = () => {
       .finally(() => setLoading(false));
   }, [matchId]);
 
+  const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
+  const [moves, setMoves] = useState([]);
+  const [currentFen, setCurrentFen] = useState('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+
+  useEffect(() => {
+    if (match && match.movimientos_pgn) {
+      try {
+        const chess = new Chess();
+        chess.loadPgn(match.movimientos_pgn);
+        const history = chess.history({ verbose: true });
+        
+        const chessTemp = new Chess();
+        const movesWithFen = history.map(move => {
+          chessTemp.move(move.san);
+          return {
+            san: move.san,
+            fen: chessTemp.fen()
+          };
+        });
+        setMoves(movesWithFen);
+        if (movesWithFen.length > 0) {
+          setCurrentMoveIndex(movesWithFen.length - 1);
+          setCurrentFen(movesWithFen[movesWithFen.length - 1].fen);
+        }
+      } catch (e) {
+        console.error("Error parsing PGN:", e);
+      }
+    }
+  }, [match]);
+
   if (loading) return <div style={{ padding: '5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Retrieving match analysis...</div>;
   if (!match) return <div style={{ padding: '5rem', textAlign: 'center' }}>Match log not found.</div>;
 
@@ -24,8 +56,41 @@ const MatchDetailPage = () => {
   const resultText = match.resultado === 'draw' ? 'Draw' : 
                     (match.resultado === (isWhite ? 'white_win' : 'black_win') ? 'Victory' : 'Defeat');
 
+  const goToFirst = () => {
+    setCurrentMoveIndex(-1);
+    setCurrentFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+  };
+
+  const goToLast = () => {
+    if (moves.length > 0) {
+      setCurrentMoveIndex(moves.length - 1);
+      setCurrentFen(moves[moves.length - 1].fen);
+    }
+  };
+
+  const goToPrev = () => {
+    if (currentMoveIndex > -1) {
+      const newIndex = currentMoveIndex - 1;
+      setCurrentMoveIndex(newIndex);
+      setCurrentFen(newIndex === -1 ? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1' : moves[newIndex].fen);
+    }
+  };
+
+  const goToNext = () => {
+    if (currentMoveIndex < moves.length - 1) {
+      const newIndex = currentMoveIndex + 1;
+      setCurrentMoveIndex(newIndex);
+      setCurrentFen(moves[newIndex].fen);
+    }
+  };
+
+  const selectMove = (index) => {
+    setCurrentMoveIndex(index);
+    setCurrentFen(moves[index].fen);
+  };
+
   return (
-    <div className="fade-in" style={{ maxWidth: '900px', margin: '0 auto', padding: '4rem 2rem' }}>
+    <div className="fade-in" style={{ maxWidth: '1000px', margin: '0 auto', padding: '4rem 2rem' }}>
       <Link to="/profile/me" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '3rem', fontWeight: 600 }}>
         <LuArrowLeft size={16} /> Back to History
       </Link>
@@ -66,24 +131,60 @@ const MatchDetailPage = () => {
         </div>
       </div>
 
+      {/* Grid para Tablero y Movimientos */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '2rem', marginBottom: '4rem' }}>
+        {/* Columna Izquierda: Tablero y Controles */}
+        <div>
+          <div style={{ width: '100%', maxWidth: '400px', margin: '0 auto' }}>
+            <Chessboard position={currentFen} arePiecesDraggable={false} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginTop: '1.5rem' }}>
+            <button onClick={goToFirst} style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }} title="First Move"><LuChevronsLeft size={20} /></button>
+            <button onClick={goToPrev} style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }} title="Previous Move"><LuChevronLeft size={20} /></button>
+            <button onClick={goToNext} style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }} title="Next Move"><LuChevronRight size={20} /></button>
+            <button onClick={goToLast} style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }} title="Last Move"><LuChevronsRight size={20} /></button>
+          </div>
+        </div>
 
-      <div>
-        <h3 style={{ fontSize: '14px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--text-secondary)', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <LuFileText size={18} /> Notation (PGN)
-        </h3>
-        <div style={{ 
-          backgroundColor: 'var(--surface-color)', 
-          border: '1px solid var(--border-color)', 
-          padding: '2rem', 
-          fontFamily: 'monospace', 
-          fontSize: '14px', 
-          lineHeight: 1.8, 
-          color: 'var(--text-secondary)',
-          maxHeight: '400px',
-          overflowY: 'auto'
-        }}>
-          {match.movimientos_pgn || 'No notation data recorded for this match.'}
-
+        {/* Columna Derecha: Movimientos */}
+        <div>
+          <h3 style={{ fontSize: '14px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--text-secondary)', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <LuFileText size={18} /> Moves
+          </h3>
+          <div style={{ 
+            backgroundColor: 'var(--surface-color)', 
+            border: '1px solid var(--border-color)', 
+            padding: '1.5rem', 
+            fontFamily: 'monospace', 
+            fontSize: '14px', 
+            maxHeight: '400px',
+            overflowY: 'auto'
+          }}>
+            {moves.length === 0 ? (
+              <div style={{ color: 'var(--text-secondary)' }}>No notation data recorded.</div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                {moves.map((move, index) => (
+                  <div 
+                    key={index} 
+                    onClick={() => selectMove(index)}
+                    style={{ 
+                      padding: '8px 12px', 
+                      cursor: 'pointer', 
+                      backgroundColor: currentMoveIndex === index ? '#2563eb' : 'transparent',
+                      color: currentMoveIndex === index ? '#fff' : 'var(--text-primary)',
+                      borderRadius: '4px',
+                      textAlign: 'center',
+                      border: '1px solid',
+                      borderColor: currentMoveIndex === index ? '#2563eb' : 'var(--border-color)'
+                    }}
+                  >
+                    {Math.floor(index / 2) + 1}.{index % 2 === 0 ? '' : '..'} {move.san}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
