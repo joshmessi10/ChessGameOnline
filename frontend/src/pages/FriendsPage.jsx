@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/auth';
 import { LuUsers, LuUserPlus, LuMail, LuUserX, LuCheck, LuArrowRight } from 'react-icons/lu';
 
@@ -27,13 +27,20 @@ const TabButton = ({ active, onClick, icon: Icon, children, count }) => (
 );
 
 const FriendsPage = () => {
+  const navigate = useNavigate();
   const [tab, setTab] = useState('friends');
   const [friends, setFriends] = useState([]);
   const [requests, setRequests] = useState([]);
+  const [gameInvites, setGameInvites] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sentRequests, setSentRequests] = useState({});
+
+  // Challenge Modal States
+  const [challengeFriend, setChallengeFriend] = useState(null); // { id, name }
+  const [matchType, setMatchType] = useState('blitz');
+  const [timeControl, setTimeControl] = useState('3+2');
 
   const fetchFriends = async () => {
     try {
@@ -41,6 +48,9 @@ const FriendsPage = () => {
       const all = Array.isArray(data) ? data : (data.friends || []);
       setFriends(all.filter(f => f.estado === 'accepted'));
       setRequests(all.filter(f => f.estado === 'pending'));
+
+      const resInv = await api.get('/match/invite/pending');
+      setGameInvites(resInv.data || []);
     } catch { }
     setLoading(false);
   };
@@ -79,6 +89,40 @@ const FriendsPage = () => {
     catch { alert('Removal failed.'); }
   };
 
+  const handleSendChallenge = async () => {
+    if (!challengeFriend) return;
+    try {
+      const { data } = await api.post('/match/invite', {
+        friend_id: challengeFriend.id,
+        modo: matchType,
+        control_tiempo: timeControl
+      });
+      setChallengeFriend(null);
+      navigate(`/play/${data.id}`);
+    } catch {
+      alert('Failed to initiate challenge invitation.');
+    }
+  };
+
+  const acceptGameInvite = async (inviteID) => {
+    try {
+      await api.put(`/match/invite/${inviteID}/accept`);
+      navigate(`/play/${inviteID}`);
+    } catch {
+      alert('Failed to accept game invitation.');
+    }
+  };
+
+  const declineGameInvite = async (inviteID) => {
+    try {
+      await api.delete(`/match/invite/${inviteID}/decline`);
+      fetchFriends();
+    } catch {
+      alert('Failed to decline game invitation.');
+    }
+  };
+
+
   return (
     <div className="fade-in" style={{ maxWidth: '800px', margin: '0 auto', padding: '4rem 2rem' }}>
       <div style={{ marginBottom: '3rem' }}>
@@ -88,7 +132,7 @@ const FriendsPage = () => {
 
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', marginBottom: '3rem' }}>
         <TabButton active={tab === 'friends'} onClick={() => setTab('friends')} icon={LuUsers} count={friends.length}>Connections</TabButton>
-        <TabButton active={tab === 'requests'} onClick={() => setTab('requests')} icon={LuMail} count={requests.length}>Requests</TabButton>
+        <TabButton active={tab === 'requests'} onClick={() => setTab('requests')} icon={LuMail} count={requests.length + gameInvites.length}>Requests</TabButton>
         <TabButton active={tab === 'search'} onClick={() => setTab('search')} icon={LuUserPlus}>Discovery</TabButton>
       </div>
 
@@ -105,9 +149,12 @@ const FriendsPage = () => {
                   <div style={{ fontSize: '12px', color: '#f59e0b', fontWeight: 700 }}>{f.userELO || 1200} pts</div>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <button onClick={() => setChallengeFriend({ id: f.amigo_id, name: f.amigo_name })} className="primary-btn" style={{ fontSize: '11px', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  Challenge ⚔️
+                </button>
                 <Link to={`/profile/${f.amigo_id}`} className="secondary-btn" style={{ fontSize: '11px', padding: '6px 12px' }}>View</Link>
-                <button onClick={() => removeFriend(f.amigo_id)} style={{ backgroundColor: 'transparent', color: 'var(--error-color)', fontSize: '11px', fontWeight: 600 }}>Remove</button>
+                <button onClick={() => removeFriend(f.amigo_id)} style={{ backgroundColor: 'transparent', color: 'var(--error-color)', fontSize: '11px', fontWeight: 600, paddingLeft: '8px' }}>Remove</button>
               </div>
             </div>
           ))}
@@ -115,24 +162,52 @@ const FriendsPage = () => {
       )}
 
       {tab === 'requests' && (
-        <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border-color)' }}>
-          {requests.length === 0 ? (
-            <div style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '14px' }}>Inbox is empty.</div>
-          ) : requests.map(r => (
-            <div key={r.id} style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#09090b' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ width: '40px', height: '40px', backgroundColor: 'var(--text-primary)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900 }}>!</div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '15px' }}>{r.amigo_name}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Incoming invitation</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+          <div>
+            <h3 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '1rem', letterSpacing: '0.05em' }}>Friend Requests ({requests.length})</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border-color)' }}>
+              {requests.length === 0 ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>No pending friend requests.</div>
+              ) : requests.map(r => (
+                <div key={r.id} style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#09090b' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ width: '40px', height: '40px', backgroundColor: 'var(--text-primary)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900 }}>!</div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '15px' }}>{r.amigo_name}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Incoming invitation</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button onClick={() => acceptRequest(r.usuario_id)} className="primary-btn" style={{ padding: '6px 16px', fontSize: '11px' }}>Verify</button>
+                    <button onClick={() => rejectRequest(r.usuario_id)} className="secondary-btn" style={{ padding: '6px 16px', fontSize: '11px' }}>Decline</button>
+                  </div>
                 </div>
-              </div>
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button onClick={() => acceptRequest(r.usuario_id)} className="primary-btn" style={{ padding: '6px 16px', fontSize: '11px' }}>Verify</button>
-                <button onClick={() => rejectRequest(r.usuario_id)} className="secondary-btn" style={{ padding: '6px 16px', fontSize: '11px' }}>Decline</button>
-              </div>
+              ))}
             </div>
-          ))}
+          </div>
+
+          <div>
+            <h3 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '1rem', letterSpacing: '0.05em' }}>Game Challenges ({gameInvites.length})</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border-color)' }}>
+              {gameInvites.length === 0 ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>No active game challenges.</div>
+              ) : gameInvites.map(inv => (
+                <div key={inv.id} style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#09090b' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ width: '40px', height: '40px', backgroundColor: '#f59e0b', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 900 }}>⚔️</div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '15px' }}>{inv.inviter_username} <span style={{ color: '#f59e0b', fontSize: '12px' }}>({inv.inviter_elo} ELO)</span></div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Challenged you to {inv.modo.toUpperCase()} ({inv.control_tiempo})</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button onClick={() => acceptGameInvite(inv.id)} className="primary-btn" style={{ padding: '6px 16px', fontSize: '11px', backgroundColor: 'var(--success-color)', border: 'none', color: '#000' }}>Accept</button>
+                    <button onClick={() => declineGameInvite(inv.id)} className="secondary-btn" style={{ padding: '6px 16px', fontSize: '11px' }}>Decline</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -157,8 +232,86 @@ const FriendsPage = () => {
           </div>
         </div>
       )}
+
+      {/* Challenge Modal */}
+      {challengeFriend && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.85)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 9999
+        }}>
+          <div style={{
+            backgroundColor: 'var(--surface-color)', border: '1px solid var(--border-color)',
+            padding: '2.5rem', width: '90%', maxWidth: '400px',
+            display: 'flex', flexDirection: 'column', gap: '1.5rem'
+          }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 800 }}>Challenge {challengeFriend.name}</h2>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Game Mode</label>
+              <select value={matchType} onChange={e => {
+                setMatchType(e.target.value);
+                if (e.target.value === 'bullet') setTimeControl('1+0');
+                else if (e.target.value === 'blitz') setTimeControl('3+2');
+                else if (e.target.value === 'rapid') setTimeControl('10+5');
+                else setTimeControl('30+0');
+              }} style={{
+                backgroundColor: 'var(--bg-color)', border: '1px solid var(--border-color)',
+                padding: '0.8rem', color: 'var(--text-primary)', width: '100%', fontSize: '14px'
+              }}>
+                <option value="bullet">Bullet</option>
+                <option value="blitz">Blitz</option>
+                <option value="rapid">Rapid</option>
+                <option value="classical">Classical</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Time Control</label>
+              <select value={timeControl} onChange={e => setTimeControl(e.target.value)} style={{
+                backgroundColor: 'var(--bg-color)', border: '1px solid var(--border-color)',
+                padding: '0.8rem', color: 'var(--text-primary)', width: '100%', fontSize: '14px'
+              }}>
+                {matchType === 'bullet' && (
+                  <>
+                    <option value="1+0">1+0 (Bullet)</option>
+                    <option value="2+1">2+1 (Bullet)</option>
+                  </>
+                )}
+                {matchType === 'blitz' && (
+                  <>
+                    <option value="3+0">3+0 (Blitz)</option>
+                    <option value="3+2">3+2 (Blitz)</option>
+                    <option value="5+0">5+0 (Blitz)</option>
+                    <option value="5+3">5+3 (Blitz)</option>
+                  </>
+                )}
+                {matchType === 'rapid' && (
+                  <>
+                    <option value="10+0">10+0 (Rapid)</option>
+                    <option value="10+5">10+5 (Rapid)</option>
+                    <option value="15+10">15+10 (Rapid)</option>
+                  </>
+                )}
+                {matchType === 'classical' && (
+                  <>
+                    <option value="30+0">30+0 (Classical)</option>
+                    <option value="30+30">30+30 (Classical)</option>
+                  </>
+                )}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+              <button onClick={handleSendChallenge} className="primary-btn" style={{ flex: 1, padding: '12px' }}>Send Challenge</button>
+              <button onClick={() => setChallengeFriend(null)} className="secondary-btn" style={{ flex: 1, padding: '12px' }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default FriendsPage;
+

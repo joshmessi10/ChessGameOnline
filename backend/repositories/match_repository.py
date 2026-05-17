@@ -34,3 +34,12 @@ class MatchRepository:
     def get_finished_matches(self) -> List[Match]:
         statement = select(Match).where(Match.estado == "finished")
         return self.session.exec(statement).all()
+
+    def find_pending_invites_by_guest_id(self, guest_id: int) -> List[Match]:
+        from ..models.enums import MatchStatus
+        statement = select(Match).where(
+            Match.jugador_negras_id == guest_id,
+            Match.estado == MatchStatus.WAITING
+        )
+        return self.session.exec(statement).all()
+

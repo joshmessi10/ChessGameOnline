@@ -28,6 +28,8 @@ class MatchHistoryItemDTO(BaseModel):
     result: str
     date: datetime
     playerColor: str
+    modo: MatchType
+
 
 class UserResponse(BaseModel):
     id: int

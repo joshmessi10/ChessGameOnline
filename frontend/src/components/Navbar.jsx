@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LuPlay, LuUsers, LuUser, LuLogOut, LuSearch, LuTrendingUp } from 'react-icons/lu';
+import { LuPlay, LuUsers, LuUser, LuLogOut, LuSearch, LuTrendingUp, LuSettings } from 'react-icons/lu';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -70,8 +70,12 @@ const Navbar = () => {
         {user ? (
           <>
             <Link to="/profile/me" style={navLinkStyle}>
-              <LuUser size={16} /> {user.username}
+              <LuUser size={16} /> {user.nombre_usuario || user.username}
             </Link>
+            <Link to="/settings" style={navLinkStyle} title="Settings">
+              <LuSettings size={16} /> Settings
+            </Link>
+
             <button 
               onClick={handleLogout} 
               style={{

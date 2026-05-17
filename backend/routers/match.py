@@ -9,7 +9,13 @@ from ..database import get_session
 
 router = APIRouter(prefix="/api/match", tags=["match"])
 
+@router.get("/invite/pending")
+async def get_pending_invites(session: SessionDep, current_user: CurrentUserDep):
+    service = MatchService(session)
+    return service.get_pending_invites(current_user.id)
+
 @router.get("/{matchID}", response_model=MatchResponse)
+
 async def get_match(matchID: int, session: SessionDep):
     service = MatchService(session)
     return service.get_match(matchID)
@@ -79,12 +85,27 @@ async def send_invite(request: InviteRequest, session: SessionDep, current_user:
 @router.put("/invite/{inviteID}/accept")
 async def accept_invite(inviteID: int, session: SessionDep, current_user: CurrentUserDep):
     service = MatchService(session)
-    return service.join_match(inviteID, current_user.id)
+    res = service.join_match(inviteID, current_user.id)
+    await websocket_manager.broadcast_to_match(inviteID, {
+        "type": "match_started",
+        "match_id": inviteID,
+        "board_state": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "turn": "white",
+        "match_status": "in_progress"
+    })
+    return res
 
 @router.delete("/invite/{inviteID}/decline")
 async def decline_invite(inviteID: int, session: SessionDep, current_user: CurrentUserDep):
     service = MatchService(session)
-    return service.decline_invite(inviteID, current_user.id)
+    res = service.decline_invite(inviteID, current_user.id)
+    await websocket_manager.broadcast_to_match(inviteID, {
+        "type": "match_cancelled",
+        "match_id": inviteID,
+        "message": "Challenge declined"
+    })
+    return res
+
 
 @router.websocket("/{matchID}/ws")
 async def match_websocket(websocket: WebSocket, matchID: int, session: Session = Depends(get_session)):

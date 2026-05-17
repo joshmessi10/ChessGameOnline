@@ -9,13 +9,20 @@ from backend.models.enums import MatchStatus, MatchType, MatchResult
 from backend.core.security import create_access_token
 from backend.services.match_service import MatchService
 
+from sqlalchemy.pool import StaticPool
+
 def run_tests():
     print("==================================================")
     print("   RUNNING INTEGRATION TESTS FOR PHASE 4 INVITES  ")
     print("==================================================")
 
     # 1. Create clean in-memory engine and session
-    engine = create_engine("sqlite:///file:testdb_p4?mode=memory&cache=shared", connect_args={"check_same_thread": False, "uri": True})
+    engine = create_engine(
+        "sqlite:///file:testdb_p4?mode=memory&cache=shared",
+        connect_args={"check_same_thread": False, "uri": True},
+        poolclass=StaticPool
+    )
+
     SQLModel.metadata.create_all(engine)
     
     session = Session(engine)
@@ -81,7 +88,22 @@ def run_tests():
     invite_id2 = resp_invite2.json()["id"]
     print(f"[PASS] Second challenge invitation sent. Invite ID: {invite_id2}")
 
+    print("\n--- Test Case 3.5: Fetch pending game invitations ---")
+    resp_pending = client.get(
+        "/api/match/invite/pending",
+        headers=headers2
+    )
+    assert resp_pending.status_code == 200
+    pending_list = resp_pending.json()
+    assert len(pending_list) == 1
+    assert pending_list[0]["id"] == invite_id2
+    assert pending_list[0]["inviter_username"] == "Magnus"
+    assert pending_list[0]["modo"] == "rapid"
+    assert pending_list[0]["control_tiempo"] == "10+5"
+    print("[PASS] Pending challenge invitations retrieved and validated successfully.")
+
     print("\n--- Test Case 4: Accept game invitation ---")
+
     resp_accept = client.put(
         f"/api/match/invite/{invite_id2}/accept",
         headers=headers2

@@ -23,6 +23,8 @@ class MatchResponse(BaseModel):
     id: int
     jugador_blancas_id: int
     jugador_negras_id: int
+    playerWhiteUsername: str
+    playerBlackUsername: str
     modo: MatchType
     control_tiempo: str
     resultado: MatchResult
@@ -30,6 +32,7 @@ class MatchResponse(BaseModel):
     movimientos_pgn: Optional[str]
     creada_en: datetime
     finalizada_en: Optional[datetime]
+
 
 class EndMatchRequest(BaseModel):
     reason: str

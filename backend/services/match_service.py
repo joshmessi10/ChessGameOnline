@@ -15,9 +15,12 @@ from ..core.chess_engine import ChessEngine
 
 class MatchService:
     def __init__(self, session: Session):
+        from ..repositories.usuario_repository import UsuarioRepository
         self.match_repo = MatchRepository(session)
         self.rating_repo = RatingRepository(session)
         self.stats_repo = StatisticsRepository(session)
+        self.user_repo = UsuarioRepository(session)
+
 
     def get_match(self, match_id: int) -> MatchResponse:
         match = self.match_repo.find_by_id(match_id)
@@ -192,10 +195,14 @@ class MatchService:
         )
 
     def _map_to_response(self, match: Match) -> MatchResponse:
+        user_w = self.user_repo.find_by_id(match.jugador_blancas_id)
+        user_b = self.user_repo.find_by_id(match.jugador_negras_id)
         return MatchResponse(
             id=match.id,
             jugador_blancas_id=match.jugador_blancas_id,
             jugador_negras_id=match.jugador_negras_id,
+            playerWhiteUsername=user_w.nombre_usuario if user_w else "Unknown",
+            playerBlackUsername=user_b.nombre_usuario if user_b else "Unknown",
             modo=match.modo,
             control_tiempo=match.control_tiempo,
             resultado=match.resultado,
@@ -204,6 +211,7 @@ class MatchService:
             creada_en=match.creada_en,
             finalizada_en=match.finalizada_en
         )
+
 
     def make_move(self, match_id: int, user_id: int, request: MoveRequest) -> MoveResponse:
         match = self.match_repo.find_by_id(match_id)
@@ -266,3 +274,21 @@ class MatchService:
             is_checkmate=status["isCheckmate"],
             is_draw=status["isDraw"]
         )
+
+    def get_pending_invites(self, user_id: int) -> List[dict]:
+        invites = self.match_repo.find_pending_invites_by_guest_id(user_id)
+        results = []
+        for inv in invites:
+            host = self.user_repo.find_by_id(inv.jugador_blancas_id)
+            host_rating = self.rating_repo.find_by_usuario_and_modo(inv.jugador_blancas_id, inv.modo)
+            results.append({
+                "id": inv.id,
+                "inviter_id": inv.jugador_blancas_id,
+                "inviter_username": host.nombre_usuario if host else "Unknown",
+                "inviter_elo": host_rating.rating if host_rating else 1200,
+                "modo": inv.modo,
+                "control_tiempo": inv.control_tiempo,
+                "estado": inv.estado
+            })
+        return results
+

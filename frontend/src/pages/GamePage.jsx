@@ -131,7 +131,14 @@ const GamePage = () => {
             });
           }, 1500);
         }
+      } else if (data.type === 'match_started') {
+        loadGameData();
+      } else if (data.type === 'match_cancelled') {
+
+        alert('The challenge has been cancelled or declined.');
+        navigate('/friends');
       } else if (data.type === 'match_ended') {
+
         // Handle resignation/draw agreement
         const isWhite = user?.id === match.jugador_blancas_id;
         const newElo = isWhite ? data.newELOPlayerWhite : data.newELOPlayerBlack;
@@ -390,7 +397,59 @@ const GamePage = () => {
     </div>
   );
 
+  if (match && match.estado === 'waiting') {
+    const isWhite = user?.id === match.jugador_blancas_id;
+    const opponentName = isWhite ? blackPlayer?.nombre_usuario : whitePlayer?.nombre_usuario;
+    const opponentELO = isWhite ? blackPlayer?.userELO : whitePlayer?.userELO;
+
+    return (
+      <div className="fade-in" style={{
+        minHeight: '85vh', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '2rem'
+      }}>
+        <div style={{
+          backgroundColor: 'var(--surface-color)', border: '1px solid var(--border-color)',
+          padding: '4rem 3rem', maxWidth: '500px', width: '100%',
+          display: 'flex', flexDirection: 'column', gap: '2rem',
+          boxShadow: '0 20px 50px rgba(0,0,0,0.6)'
+        }}>
+          <div style={{ fontSize: '64px', animation: 'pulse 2s infinite' }}>⚔️</div>
+          <div>
+            <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '0.5rem' }}>Challenge Pending</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+              Waiting for <strong style={{ color: 'var(--text-primary)' }}>{opponentName || 'your friend'}</strong> to accept the challenge...
+            </p>
+          </div>
+
+          <div style={{
+            borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)',
+            padding: '1.5rem 0', display: 'flex', flexDirection: 'column', gap: '8px'
+          }}>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Challenge Configuration</div>
+            <div style={{ fontSize: '18px', fontWeight: 900 }}>{match.modo.toUpperCase()} Ranked</div>
+            <div style={{ fontSize: '14px', color: '#f59e0b', fontWeight: 700 }}>Time Control: {match.control_tiempo}</div>
+          </div>
+
+          <button onClick={async () => {
+            try {
+              await api.delete(`/match/invite/${match.id}/decline`);
+              navigate('/friends');
+            } catch {
+              alert('Failed to cancel the challenge.');
+            }
+          }} className="secondary-btn" style={{
+            padding: '12px', width: '100%', color: 'var(--error-color)',
+            borderColor: 'rgba(239, 68, 68, 0.2)', fontWeight: 700
+          }}>
+            Cancel Challenge
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
+
     <div style={{ 
       maxWidth: '1200px', margin: '0 auto', padding: '2rem',
       display: 'grid', gridTemplateColumns: 'minmax(400px, 600px) 1fr', gap: '3rem',

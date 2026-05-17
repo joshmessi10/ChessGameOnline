@@ -16,6 +16,7 @@ import MatchmakingPage from './pages/MatchmakingPage';
 import MatchDetailPage from './pages/MatchDetailPage';
 import ResultPage from './pages/ResultPage';
 import GamePage from './pages/GamePage';
+import SettingsPage from './pages/SettingsPage';
 
 const App = () => {
   return (
@@ -55,9 +56,13 @@ const App = () => {
               <Route path="/result" element={
                 <ProtectedRoute><ResultPage /></ProtectedRoute>
               } />
+              <Route path="/settings" element={
+                <ProtectedRoute><SettingsPage /></ProtectedRoute>
+              } />
 
               {/* Catch all */}
               <Route path="*" element={<Navigate to="/" />} />
+
             </Routes>
           </main>
         </div>

@@ -98,31 +98,32 @@ const ProfilePage = () => {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {matches.map(m => {
-                const isWinner = m.resultado === (m.color_usuario === 'white' ? 'white_win' : 'black_win');
+                const isWinner = m.result === (m.playerColor === 'white' ? 'white_win' : 'black_win');
                 return (
-                  <div key={m.id} style={{ 
+                  <div key={m.matchID} style={{ 
                     padding: '1.25rem 2rem', borderBottom: '1px solid var(--border-color)', 
                     display: 'grid', gridTemplateColumns: '120px 1fr 150px 100px', alignItems: 'center',
                     backgroundColor: isWinner ? 'rgba(34, 197, 94, 0.03)' : 'transparent'
                   }}>
                     <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: isWinner ? 'var(--success-color)' : 'var(--text-secondary)' }}>
-                      {isWinner ? 'Victory' : 'Defeat'}
+                      {isWinner ? 'Victory' : (m.result === 'draw' ? 'Draw' : 'Defeat')}
                     </div>
                     <div>
-                      <div style={{ fontSize: '14px', fontWeight: 800 }}>vs. {m.oponente_nombre}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{m.tipo_partida} • {m.color_usuario}</div>
+                      <div style={{ fontSize: '14px', fontWeight: 800 }}>vs. {m.opponentUsername}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{m.modo} • {m.playerColor}</div>
                     </div>
                     <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'right' }}>
-                      {new Date(m.fecha).toLocaleDateString()}
+                      {new Date(m.date).toLocaleDateString()}
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <Link to={`/match/${m.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', fontSize: '12px', fontWeight: 700 }}>
+                      <Link to={`/match/${m.matchID}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', fontSize: '12px', fontWeight: 700 }}>
                         Details <LuExternalLink size={14} />
                       </Link>
                     </div>
                   </div>
                 );
               })}
+
             </div>
           )}
         </div>

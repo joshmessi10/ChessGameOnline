@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/auth';
+import { useAuth } from '../context/AuthContext';
 import { LuArrowLeft, LuFileText, LuUser, LuCalendar, LuTrophy, LuInfo } from 'react-icons/lu';
 
 const MatchDetailPage = () => {
   const { matchId } = useParams();
+  const { user } = useAuth();
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -18,7 +20,7 @@ const MatchDetailPage = () => {
   if (loading) return <div style={{ padding: '5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Retrieving match analysis...</div>;
   if (!match) return <div style={{ padding: '5rem', textAlign: 'center' }}>Match log not found.</div>;
 
-  const isWhite = match.color_usuario === 'white';
+  const isWhite = match.jugador_blancas_id === user?.id;
   const resultText = match.resultado === 'draw' ? 'Draw' : 
                     (match.resultado === (isWhite ? 'white_win' : 'black_win') ? 'Victory' : 'Defeat');
 
@@ -35,8 +37,8 @@ const MatchDetailPage = () => {
         <div>
           <h1 style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>Match Analysis</h1>
           <div style={{ display: 'flex', gap: '1.5rem', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><LuCalendar size={14} /> {new Date(match.fecha).toLocaleDateString()}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><LuInfo size={14} /> {match.tipo_partida.toUpperCase()}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><LuCalendar size={14} /> {new Date(match.creada_en).toLocaleDateString()}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><LuInfo size={14} /> {match.modo.toUpperCase()}</span>
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
@@ -50,15 +52,20 @@ const MatchDetailPage = () => {
           <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <LuUser size={14} /> White Pieces
           </div>
-          <div style={{ fontSize: '20px', fontWeight: 800 }}>{isWhite ? 'You' : match.oponente_nombre}</div>
+          <div style={{ fontSize: '20px', fontWeight: 800 }}>
+            {match.playerWhiteUsername} {match.jugador_blancas_id === user?.id && <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500 }}>(You)</span>}
+          </div>
         </div>
         <div style={{ backgroundColor: 'var(--surface-color)', padding: '2rem' }}>
           <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <LuUser size={14} /> Black Pieces
           </div>
-          <div style={{ fontSize: '20px', fontWeight: 800 }}>{isWhite ? match.oponente_nombre : 'You'}</div>
+          <div style={{ fontSize: '20px', fontWeight: 800 }}>
+            {match.playerBlackUsername} {match.jugador_negras_id === user?.id && <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500 }}>(You)</span>}
+          </div>
         </div>
       </div>
+
 
       <div>
         <h3 style={{ fontSize: '14px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--text-secondary)', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -75,7 +82,8 @@ const MatchDetailPage = () => {
           maxHeight: '400px',
           overflowY: 'auto'
         }}>
-          {match.pgn || 'No notation data recorded for this match.'}
+          {match.movimientos_pgn || 'No notation data recorded for this match.'}
+
         </div>
       </div>
 

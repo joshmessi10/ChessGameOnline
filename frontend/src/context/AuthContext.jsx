@@ -36,11 +36,16 @@ export const AuthProvider = ({ children }) => {
     logoutApi();
   };
 
+  const updateUser = (newUserData) => {
+    setUser(prev => prev ? { ...prev, ...newUserData } : null);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
+
 };
 
 export const useAuth = () => useContext(AuthContext);

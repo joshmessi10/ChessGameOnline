@@ -65,8 +65,10 @@ class UserService:
                 opponentUsername=opponent.nombre_usuario if opponent else "Unknown",
                 result=m.resultado,
                 date=m.creada_en,
-                playerColor="white" if is_white else "black"
+                playerColor="white" if is_white else "black",
+                modo=m.modo
             ))
+
             
         return UserResponse(
             id=user.id,
