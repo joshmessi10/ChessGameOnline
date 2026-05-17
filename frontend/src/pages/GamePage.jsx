@@ -24,6 +24,8 @@ const GamePage = () => {
   const chatEndRef = useRef(null);
 
   const wsRef = useRef(null);
+  const [selectedSquare, setSelectedSquare] = useState(null);
+  const [customSquareStyles, setCustomSquareStyles] = useState({});
 
   // Scroll to bottom of chat
   useEffect(() => {
@@ -156,18 +158,9 @@ const GamePage = () => {
     };
   }, [loading, match]);
 
-  // Handle move drop on board
-  const onDrop = async (source, target) => {
+  // Helper to execute and commit move to server
+  const executeMove = async (source, target) => {
     if (!match || match.estado !== 'in_progress') return false;
-
-    // Determine current user color
-    const userColor = user?.id === match.jugador_blancas_id ? 'white' : 'black';
-    const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
-
-    if (userColor !== currentTurnColor) {
-      alert("It is not your turn!");
-      return false;
-    }
 
     const originalFen = game.fen();
 
@@ -192,11 +185,117 @@ const GamePage = () => {
       setGame(newGame);
       return true;
     } catch (err) {
-      // Revert FEN on error
+      // Revert FEN silently on error (no browser alert popups!)
       setGame(new Chess(originalFen));
-      const errMsg = err.response?.data?.detail || "Invalid move.";
-      alert(errMsg);
       return false;
+    }
+  };
+
+  // Handle move drop on board (drag-and-drop support)
+  const onDrop = async (source, target) => {
+    if (!match || match.estado !== 'in_progress') return false;
+
+    // Prevent dragging opponent's pieces
+    const piece = game.get(source);
+    if (!piece) return false;
+
+    const userColor = user?.id === match.jugador_blancas_id ? 'white' : 'black';
+    if ((piece.color === 'w' && userColor === 'black') || (piece.color === 'b' && userColor === 'white')) {
+      return false;
+    }
+
+    const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+    if (userColor !== currentTurnColor) return false;
+
+    // Clear click selection if dragging
+    setSelectedSquare(null);
+    setCustomSquareStyles({});
+
+    return await executeMove(source, target);
+  };
+
+  // Handle square clicks (click-to-move support with legal moves highlight)
+  const onSquareClick = async (square) => {
+    if (!match || match.estado !== 'in_progress') return;
+
+    const userColor = user?.id === match.jugador_blancas_id ? 'white' : 'black';
+    const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+
+    // Only allow selecting and moving on your turn
+    if (userColor !== currentTurnColor) return;
+
+    const piece = game.get(square);
+
+    // Case A: No square is selected yet
+    if (!selectedSquare) {
+      // White player can only select white pieces, Black player only black pieces
+      if (piece && ((piece.color === 'w' && userColor === 'white') || (piece.color === 'b' && userColor === 'black'))) {
+        setSelectedSquare(square);
+
+        // Generate visual highlights for selected piece and its legal target moves
+        const moves = game.moves({ square, verbose: true });
+        const styles = {
+          [square]: {
+            boxShadow: 'inset 0 0 0 6px #f59e0b', // Amber selection border
+            backgroundColor: 'rgba(245, 158, 11, 0.15)'
+          }
+        };
+
+        moves.forEach(m => {
+          const hasPiece = game.get(m.to);
+          styles[m.to] = {
+            background: hasPiece 
+              ? 'radial-gradient(circle, transparent 60%, rgba(245, 158, 11, 0.5) 62%)' // ring highlight for capture targets
+              : 'radial-gradient(circle, rgba(245, 158, 11, 0.4) 25%, transparent 26%)', // dot highlight for empty move targets
+            cursor: 'pointer'
+          };
+        });
+
+        setCustomSquareStyles(styles);
+      }
+    } else {
+      // Case B: A square is already selected
+      if (selectedSquare === square) {
+        // Clicking the same square deselects it
+        setSelectedSquare(null);
+        setCustomSquareStyles({});
+        return;
+      }
+
+      // If user clicks another of their own pieces, change the selection highlight
+      if (piece && ((piece.color === 'w' && userColor === 'white') || (piece.color === 'b' && userColor === 'black'))) {
+        setSelectedSquare(square);
+
+        const moves = game.moves({ square, verbose: true });
+        const styles = {
+          [square]: {
+            boxShadow: 'inset 0 0 0 6px #f59e0b',
+            backgroundColor: 'rgba(245, 158, 11, 0.15)'
+          }
+        };
+
+        moves.forEach(m => {
+          const hasPiece = game.get(m.to);
+          styles[m.to] = {
+            background: hasPiece 
+              ? 'radial-gradient(circle, transparent 60%, rgba(245, 158, 11, 0.5) 62%)'
+              : 'radial-gradient(circle, rgba(245, 158, 11, 0.4) 25%, transparent 26%)',
+            cursor: 'pointer'
+          };
+        });
+
+        setCustomSquareStyles(styles);
+        return;
+      }
+
+      // Try making the move
+      const source = selectedSquare;
+      const target = square;
+
+      setSelectedSquare(null);
+      setCustomSquareStyles({});
+
+      await executeMove(source, target);
     }
   };
 
@@ -282,6 +381,8 @@ const GamePage = () => {
           <Chessboard 
             position={game.fen()} 
             onPieceDrop={onDrop}
+            onSquareClick={onSquareClick}
+            customSquareStyles={customSquareStyles}
             boardOrientation={userColor}
             arePiecesDraggable={match.estado === 'in_progress' && myTurn}
             customDarkSquareStyle={{ backgroundColor: '#09090b' }}
