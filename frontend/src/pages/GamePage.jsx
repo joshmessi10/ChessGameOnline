@@ -120,7 +120,7 @@ const GamePage = () => {
 
         if (data.match_status === 'finished') {
           // If match finished from checkmate or draw
-          const isWhite = user?.id === match.jugador_blancas_id;
+          const isWhite = Number(user?.id) === Number(match.jugador_blancas_id);
           const eloDiff = isWhite ? data.eloChangePlayerWhite : data.eloChangePlayerBlack;
           
           setTimeout(() => {
@@ -144,7 +144,7 @@ const GamePage = () => {
       } else if (data.type === 'match_ended') {
 
         // Handle resignation/draw agreement
-        const isWhite = user?.id === match.jugador_blancas_id;
+        const isWhite = Number(user?.id) === Number(match.jugador_blancas_id);
         const eloDiff = isWhite ? data.eloChangePlayerWhite : data.eloChangePlayerBlack;
         
         navigate('/result', {
@@ -224,7 +224,7 @@ const GamePage = () => {
     const piece = game.get(source);
     if (!piece) return false;
 
-    const userColor = user?.id === match.jugador_blancas_id ? 'white' : 'black';
+    const userColor = Number(user?.id) === Number(match.jugador_blancas_id) ? 'white' : 'black';
     if ((piece.color === 'w' && userColor === 'black') || (piece.color === 'b' && userColor === 'white')) {
       return false;
     }
@@ -243,7 +243,7 @@ const GamePage = () => {
   const onSquareClick = async (square) => {
     if (!match || match.estado !== 'in_progress') return;
 
-    const userColor = user?.id === match.jugador_blancas_id ? 'white' : 'black';
+    const userColor = Number(user?.id) === Number(match.jugador_blancas_id) ? 'white' : 'black';
     const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
 
     // Only allow selecting and moving on your turn
@@ -328,7 +328,7 @@ const GamePage = () => {
   const isDraggablePiece = ({ piece }) => {
     if (!match || match.estado !== 'in_progress') return false;
 
-    const userColor = user?.id === match.jugador_blancas_id ? 'white' : 'black';
+    const userColor = Number(user?.id) === Number(match.jugador_blancas_id) ? 'white' : 'black';
     const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
     
     // Only draggable on your turn
@@ -400,7 +400,7 @@ const GamePage = () => {
     setChatInput('');
   };
 
-  if (loading) {
+  if (loading || !user) {
     return (
       <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
         Entering game lobby...
@@ -408,7 +408,7 @@ const GamePage = () => {
     );
   }
 
-  const userColor = user?.id === match.jugador_blancas_id ? 'white' : 'black';
+  const userColor = Number(user?.id) === Number(match.jugador_blancas_id) ? 'white' : 'black';
   const myTurn = (game.turn() === 'w' && userColor === 'white') || (game.turn() === 'b' && userColor === 'black');
   
   // Arrange players (Opponent on top, Current User on bottom)
@@ -442,7 +442,7 @@ const GamePage = () => {
   );
 
   if (match && match.estado === 'waiting') {
-    const isWhite = user?.id === match.jugador_blancas_id;
+    const isWhite = Number(user?.id) === Number(match.jugador_blancas_id);
     const opponentName = isWhite ? blackPlayer?.nombre_usuario : whitePlayer?.nombre_usuario;
     const opponentELO = isWhite ? blackPlayer?.userELO : whitePlayer?.userELO;
 
