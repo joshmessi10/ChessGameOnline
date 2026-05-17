@@ -10,6 +10,8 @@ from ..models.match import Match
 from ..models.enums import MatchStatus, MatchResult, EndReason
 from ..schemas.match import MatchResponse, MoveRequest, MoveResponse, EndMatchRequest, EndMatchResponse
 from ..schemas.invite import InviteRequest, InviteResponse
+import chess
+from ..core.chess_engine import ChessEngine
 
 class MatchService:
     def __init__(self, session: Session):
@@ -111,15 +113,57 @@ class MatchService:
         if not match or match.estado != MatchStatus.IN_PROGRESS:
             raise HTTPException(status_code=400, detail="Match is not active")
         
-        current_pgn = match.movimientos_pgn or ""
-        match.movimientos_pgn = f"{current_pgn} {request.move}".strip()
+        # Determine player color
+        if user_id == match.jugador_blancas_id:
+            color = "white"
+        elif user_id == match.jugador_negras_id:
+            color = "black"
+        else:
+            raise HTTPException(status_code=403, detail="You are not a participant in this match")
+            
+        # Reconstruct the board from PGN moves
+        board = chess.Board()
+        for mv in (match.movimientos_pgn or "").split():
+            try:
+                board.push_san(mv)
+            except ValueError:
+                try:
+                    board.push_uci(mv)
+                except ValueError:
+                    pass
+                    
+        # Validate and apply move
+        result = ChessEngine.validate_move(board.fen(), request.move, color)
+        if not result["isValid"]:
+            raise HTTPException(status_code=400, detail=result["rejectionReason"])
+            
+        san_move = result["appliedMove"]
+        new_pgn = f"{match.movimientos_pgn or ''} {san_move}".strip()
+        match.movimientos_pgn = new_pgn
+        
+        # Detect status
+        status = ChessEngine.detect_status(result["newBoardState"])
+        
+        if status["isCheckmate"]:
+            match.estado = MatchStatus.FINISHED
+            match.finalizada_en = datetime.now(timezone.utc)
+            if color == "white":
+                match.resultado = MatchResult.WHITE_WIN
+                match.ganador_id = match.jugador_blancas_id
+            else:
+                match.resultado = MatchResult.BLACK_WIN
+                match.ganador_id = match.jugador_negras_id
+        elif status["isDraw"]:
+            match.estado = MatchStatus.FINISHED
+            match.finalizada_en = datetime.now(timezone.utc)
+            match.resultado = MatchResult.DRAW
+            
         self.match_repo.update(match)
         
         return MoveResponse(
             success=True,
-            move=request.move,
-            board_state="initial/fen/placeholder",
-            is_checkmate=False,
-            is_draw=False,
-            matchStatus={"isCheck": False, "isCheckmate": False, "isStalemate": False}
+            move=san_move,
+            board_state=result["newBoardState"],
+            is_checkmate=status["isCheckmate"],
+            is_draw=status["isDraw"]
         )
