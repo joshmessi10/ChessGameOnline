@@ -22,10 +22,12 @@ class MatchService:
         self.user_repo = UsuarioRepository(session)
 
 
-    def get_match(self, match_id: int) -> MatchResponse:
+    def get_match(self, match_id: int, user_id: int) -> MatchResponse:
         match = self.match_repo.find_by_id(match_id)
         if not match:
             raise HTTPException(status_code=404, detail="Match not found")
+        if user_id not in (match.jugador_blancas_id, match.jugador_negras_id):
+            raise HTTPException(status_code=403, detail="You are not a participant in this match")
         return self._map_to_response(match)
 
     def _finalize_match_ratings_and_stats(self, match: Match, result: MatchResult) -> tuple:
@@ -106,6 +108,8 @@ class MatchService:
         match = self.match_repo.find_by_id(match_id)
         if not match or match.estado != MatchStatus.IN_PROGRESS:
             raise HTTPException(status_code=400, detail="Match not active")
+        if user_id not in (match.jugador_blancas_id, match.jugador_negras_id):
+            raise HTTPException(status_code=403, detail="You are not a participant in this match")
             
         # Determine match result based on user resigning or drawing
         if request.reason in ("victory", "resignation"):

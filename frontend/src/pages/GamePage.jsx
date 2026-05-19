@@ -27,6 +27,18 @@ const GamePage = () => {
   const [overlayState, setOverlayState] = useState(null); // 'confirm_resign', 'draw_offered', 'draw_sent'
   const [drawOfferFrom, setDrawOfferFrom] = useState('');
 
+  const [wsConnected, setWsConnected] = useState(true);
+
+  const matchRef = useRef(match);
+  const userRef = useRef(user);
+
+  useEffect(() => {
+    matchRef.current = match;
+  }, [match]);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   const wsRef = useRef(null);
   const [selectedSquare, setSelectedSquare] = useState(null);
@@ -88,9 +100,14 @@ const GamePage = () => {
     loadGameData();
   }, [matchId]);
 
-  // Establish WebSocket connection
+  // Establish WebSocket connection with auto-reconnection and heartbeat
   useEffect(() => {
     if (loading || !match) return;
+
+    let ws = null;
+    let pingInterval = null;
+    let reconnectTimeout = null;
+    let isDisposed = false;
 
     const token = localStorage.getItem('token');
     // Derive WS URL from the same base as REST. VITE_API_URL = "https://…/api" or "http://localhost:8000/api"
@@ -98,90 +115,135 @@ const GamePage = () => {
     const wsBase = apiBase.replace(/^http/, 'ws').replace(/\/api$/, '');
     const wsUrl = `${wsBase}/api/match/${matchId}/ws?token=${token}`;
 
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    const connectWebSocket = () => {
+      if (isDisposed) return;
+      console.log("[WebSocket] Connecting to", wsUrl);
+      ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+      ws.onopen = () => {
+        if (isDisposed) {
+          ws.close();
+          return;
+        }
+        console.log("[WebSocket] Connected successfully!");
+        setWsConnected(true);
 
-      if (data.type === 'move_made') {
-        const newGame = new Chess(data.board_state);
-        setGame(newGame);
-        setMoveCount(c => c + 1);
-        
-        // Update match state
-        setMatch(prev => ({
-          ...prev,
-          estado: data.match_status,
-          resultado: data.resultado,
-          ganador_id: data.winner_id,
-          movimientos_pgn: data.movimientos_pgn
-        }));
+        // Fetch latest state on successful (re)connection to make sure no moves were missed
+        loadGameData();
 
-        if (data.match_status === 'finished') {
-          // If match finished from checkmate or draw
-          const isWhite = Number(user?.id) === Number(match.jugador_blancas_id);
+        // Start heartbeat (ping) every 25 seconds
+        if (pingInterval) clearInterval(pingInterval);
+        pingInterval = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'ping' }));
+          }
+        }, 25000);
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        // Handle pong message
+        if (data.type === 'pong') {
+          // Heartbeat acknowledged
+          return;
+        }
+
+        if (data.type === 'move_made') {
+          const newGame = new Chess(data.board_state);
+          setGame(newGame);
+          setMoveCount(c => c + 1);
+          
+          // Update match state
+          setMatch(prev => ({
+            ...prev,
+            estado: data.match_status,
+            resultado: data.resultado,
+            ganador_id: data.winner_id,
+            movimientos_pgn: data.movimientos_pgn
+          }));
+
+          if (data.match_status === 'finished') {
+            // If match finished from checkmate or draw
+            const isWhite = Number(userRef.current?.id) === Number(matchRef.current?.jugador_blancas_id);
+            const eloDiff = isWhite ? data.eloChangePlayerWhite : data.eloChangePlayerBlack;
+            
+            setTimeout(() => {
+              navigate('/result', { 
+                state: { 
+                  matchData: { 
+                    resultado: data.resultado, 
+                    color_usuario: isWhite ? 'white' : 'black' 
+                  }, 
+                  eloDiff 
+                } 
+              });
+            }, 1500);
+          }
+        } else if (data.type === 'match_started') {
+          loadGameData();
+        } else if (data.type === 'match_cancelled') {
+          alert('The challenge has been cancelled or declined.');
+          navigate('/friends');
+        } else if (data.type === 'match_ended') {
+          // Handle resignation/draw agreement
+          const isWhite = Number(userRef.current?.id) === Number(matchRef.current?.jugador_blancas_id);
           const eloDiff = isWhite ? data.eloChangePlayerWhite : data.eloChangePlayerBlack;
           
-          setTimeout(() => {
-            navigate('/result', { 
-              state: { 
-                matchData: { 
-                  resultado: data.resultado, 
-                  color_usuario: isWhite ? 'white' : 'black' 
-                }, 
-                eloDiff 
-              } 
-            });
-          }, 1500);
-        }
-      } else if (data.type === 'match_started') {
-        loadGameData();
-      } else if (data.type === 'match_cancelled') {
-
-        alert('The challenge has been cancelled or declined.');
-        navigate('/friends');
-      } else if (data.type === 'match_ended') {
-
-        // Handle resignation/draw agreement
-        const isWhite = Number(user?.id) === Number(match.jugador_blancas_id);
-        const eloDiff = isWhite ? data.eloChangePlayerWhite : data.eloChangePlayerBlack;
-        
-        navigate('/result', {
-          state: {
-            matchData: {
-              resultado: data.resultado,
-              color_usuario: isWhite ? 'white' : 'black'
-            },
-            eloDiff
+          navigate('/result', {
+            state: {
+              matchData: {
+                resultado: data.resultado,
+                color_usuario: isWhite ? 'white' : 'black'
+              },
+              eloDiff
+            }
+          });
+        } else if (data.type === 'draw_offer') {
+          if (data.offered_by !== (userRef.current?.nombre_usuario || userRef.current?.username)) {
+            setDrawOfferFrom(data.offered_by);
+            setOverlayState('draw_offered');
           }
-        });
-      } else if (data.type === 'draw_offer') {
-        if (data.offered_by !== (user?.nombre_usuario || user?.username)) {
-          setDrawOfferFrom(data.offered_by);
-          setOverlayState('draw_offered');
+        } else if (data.type === 'draw_declined') {
+          if (data.declined_by !== (userRef.current?.nombre_usuario || userRef.current?.username)) {
+            alert(`Your draw offer was declined by ${data.declined_by}.`);
+            setOverlayState(null);
+          }
+        } else if (data.type === 'chat') {
+          setMessages(prev => [...prev, { username: data.username, message: data.message }]);
         }
-      } else if (data.type === 'draw_declined') {
-        if (data.declined_by !== (user?.nombre_usuario || user?.username)) {
-          alert(`Your draw offer was declined by ${data.declined_by}.`);
-          setOverlayState(null);
-        }
-      } else if (data.type === 'chat') {
+      };
 
-        setMessages(prev => [...prev, { username: data.username, message: data.message }]);
-      }
+      ws.onclose = (event) => {
+        if (isDisposed) return;
+        console.warn("[WebSocket] Connection closed", event);
+        setWsConnected(false);
+        if (pingInterval) clearInterval(pingInterval);
+        
+        // Schedule reconnection
+        reconnectTimeout = setTimeout(() => {
+          connectWebSocket();
+        }, 3000);
+      };
+
+      ws.onerror = (err) => {
+        console.error("[WebSocket] Error occurred, closing socket...", err);
+        ws.close();
+      };
     };
 
-    ws.onerror = (err) => {
-      console.error("WebSocket Error: ", err);
-    };
+    connectWebSocket();
 
     return () => {
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+      isDisposed = true;
+      if (pingInterval) clearInterval(pingInterval);
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
         ws.close();
       }
     };
-  }, [loading, match]);
+  }, [loading, matchId]);
 
   // Helper to execute and commit move to server
   const executeMove = async (source, target) => {
@@ -498,6 +560,22 @@ const GamePage = () => {
       display: 'grid', gridTemplateColumns: 'minmax(400px, 600px) 1fr', gap: '3rem',
       position: 'relative'
     }}>
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .pulse {
+          animation: pulse 1.5s infinite;
+        }
+        .spin {
+          animation: spin 1.2s linear infinite;
+        }
+      `}</style>
       
       {overlayState && (
         <div style={{
@@ -598,6 +676,23 @@ const GamePage = () => {
               <span style={{ color: 'var(--error-color)' }}>MATCH FINISHED ({match.resultado})</span>
             )}
           </div>
+          {!wsConnected && (
+            <div className="pulse" style={{
+              marginTop: '12px',
+              padding: '8px 12px',
+              backgroundColor: 'rgba(239, 68, 68, 0.15)',
+              border: '1px solid var(--error-color)',
+              color: 'var(--error-color)',
+              fontSize: '12px',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <span className="spin" style={{ display: 'inline-block' }}>⌛</span>
+              Reconnecting to game server...
+            </div>
+          )}
         </div>
 
         {/* Notation/History Box */}

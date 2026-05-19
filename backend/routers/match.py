@@ -20,10 +20,9 @@ async def get_my_active_matches(session: SessionDep, current_user: CurrentUserDe
     return service.get_active_matches_for_player(current_user.id)
 
 @router.get("/{matchID}", response_model=MatchResponse)
-
-async def get_match(matchID: int, session: SessionDep):
+async def get_match(matchID: int, session: SessionDep, current_user: CurrentUserDep):
     service = MatchService(session)
-    return service.get_match(matchID)
+    return service.get_match(matchID, current_user.id)
 
 @router.post("/{matchID}/move", response_model=MoveResponse)
 async def make_move(matchID: int, request: MoveRequest, session: SessionDep, current_user: CurrentUserDep):
@@ -95,6 +94,14 @@ async def match_websocket(websocket: WebSocket, matchID: int, session: Session =
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
         
+    # Check if the user is a participant in the match
+    from ..repositories.match_repository import MatchRepository
+    match_repo = MatchRepository(session)
+    match_obj = match_repo.find_by_id(matchID)
+    if not match_obj or (user.id != match_obj.jugador_blancas_id and user.id != match_obj.jugador_negras_id):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+        
     await websocket_manager.connect(matchID, websocket)
     try:
         while True:
@@ -102,7 +109,9 @@ async def match_websocket(websocket: WebSocket, matchID: int, session: Session =
             import json
             try:
                 msg = json.loads(data)
-                if msg.get("type") == "chat":
+                if msg.get("type") == "ping":
+                    await websocket.send_json({"type": "pong"})
+                elif msg.get("type") == "chat":
                     await websocket_manager.broadcast_to_match(matchID, {
                         "type": "chat",
                         "username": user.nombre_usuario,
