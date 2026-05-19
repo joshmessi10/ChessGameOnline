@@ -16,6 +16,9 @@ const GamePage = () => {
   const [whitePlayer, setWhitePlayer] = useState({ nombre_usuario: 'Loading...', userELO: 1200 });
   const [blackPlayer, setBlackPlayer] = useState({ nombre_usuario: 'Loading...', userELO: 1200 });
   const [loading, setLoading] = useState(true);
+  const [timeLeftWhite, setTimeLeftWhite] = useState(null);
+  const [timeLeftBlack, setTimeLeftBlack] = useState(null);
+  const lastMoveTimeRef = useRef(null);
 
   // Chat states
   const [showChat, setShowChat] = useState(false);
@@ -57,6 +60,9 @@ const GamePage = () => {
       const response = await api.get(`/match/${matchId}`);
       const matchData = response.data;
       setMatch(matchData);
+      setTimeLeftWhite(matchData.tiempo_restante_blancas);
+      setTimeLeftBlack(matchData.tiempo_restante_negras);
+      lastMoveTimeRef.current = matchData.ultima_jugada_en ? new Date(matchData.ultima_jugada_en) : null;
 
       // Reconstruct board state from moves
       const newGame = new Chess();
@@ -155,13 +161,20 @@ const GamePage = () => {
           setGame(newGame);
           setMoveCount(c => c + 1);
           
+          setTimeLeftWhite(data.tiempo_restante_blancas);
+          setTimeLeftBlack(data.tiempo_restante_negras);
+          lastMoveTimeRef.current = data.ultima_jugada_en ? new Date(data.ultima_jugada_en) : null;
+          
           // Update match state
           setMatch(prev => ({
             ...prev,
             estado: data.match_status,
             resultado: data.resultado,
             ganador_id: data.winner_id,
-            movimientos_pgn: data.movimientos_pgn
+            movimientos_pgn: data.movimientos_pgn,
+            tiempo_restante_blancas: data.tiempo_restante_blancas,
+            tiempo_restante_negras: data.tiempo_restante_negras,
+            ultima_jugada_en: data.ultima_jugada_en
           }));
 
           if (data.match_status === 'finished') {
@@ -244,6 +257,31 @@ const GamePage = () => {
       }
     };
   }, [loading, matchId]);
+
+  // Dynamic countdown timer for active player
+  useEffect(() => {
+    if (!match || match.estado !== 'in_progress') return;
+
+    const interval = setInterval(() => {
+      if (!lastMoveTimeRef.current) return;
+
+      const now = new Date();
+      const elapsed = (now.getTime() - lastMoveTimeRef.current.getTime()) / 1000.0;
+
+      const activeColor = game.turn(); // 'w' or 'b'
+      if (activeColor === 'w') {
+        if (match.tiempo_restante_blancas !== null && match.tiempo_restante_blancas !== undefined) {
+          setTimeLeftWhite(Math.max(0, match.tiempo_restante_blancas - elapsed));
+        }
+      } else {
+        if (match.tiempo_restante_negras !== null && match.tiempo_restante_negras !== undefined) {
+          setTimeLeftBlack(Math.max(0, match.tiempo_restante_negras - elapsed));
+        }
+      }
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [match, game]);
 
   // Helper to execute and commit move to server
   const executeMove = async (source, target) => {
@@ -477,31 +515,65 @@ const GamePage = () => {
   const opponent = userColor === 'white' ? blackPlayer : whitePlayer;
   const me = userColor === 'white' ? whitePlayer : blackPlayer;
 
-  const PlayerInfo = ({ player, isBottom }) => (
-    <div style={{
-      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      padding: '1rem', backgroundColor: 'var(--surface-color)',
-      border: '1px solid var(--border-color)',
-      marginBottom: isBottom ? 0 : '1rem',
-      marginTop: isBottom ? '1rem' : 0
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{ width: '32px', height: '32px', backgroundColor: 'var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <LuUser size={16} />
-        </div>
-        <div>
-          <div style={{ fontSize: '14px', fontWeight: 800 }}>
-            {player?.nombre_usuario || 'Waiting...'}
-            {player?.id === user?.id && <span style={{ color: 'var(--text-secondary)', fontWeight: 500, fontSize: '11px' }}> (You)</span>}
+  const formatTime = (seconds) => {
+    if (seconds === null || seconds === undefined) return '--:--';
+    if (seconds <= 0) return '00:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    if (seconds < 10 && seconds > 0) {
+      const tenths = Math.floor((seconds % 1) * 10);
+      return `${secs}.${tenths}`;
+    }
+    const minsStr = mins.toString().padStart(2, '0');
+    const secsStr = secs.toString().padStart(2, '0');
+    return `${minsStr}:${secsStr}`;
+  };
+
+  const PlayerInfo = ({ player, color, isBottom }) => {
+    const isWhite = color === 'white';
+    const timeLeft = isWhite ? timeLeftWhite : timeLeftBlack;
+    const isPlayerTurn = game.turn() === (isWhite ? 'w' : 'b') && match.estado === 'in_progress';
+    
+    return (
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '1rem', backgroundColor: 'var(--surface-color)',
+        border: '1px solid var(--border-color)',
+        marginBottom: isBottom ? 0 : '1rem',
+        marginTop: isBottom ? '1rem' : 0,
+        borderColor: isPlayerTurn ? '#f59e0b' : 'var(--border-color)',
+        boxShadow: isPlayerTurn ? '0 0 10px rgba(245, 158, 11, 0.15)' : 'none',
+        transition: 'all 0.15s ease'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ width: '32px', height: '32px', backgroundColor: 'var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <LuUser size={16} />
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600 }}>RANK {player?.userELO || 1200}</div>
+          <div>
+            <div style={{ fontSize: '14px', fontWeight: 800 }}>
+              {player?.nombre_usuario || 'Waiting...'}
+              {player?.id === user?.id && <span style={{ color: 'var(--text-secondary)', fontWeight: 500, fontSize: '11px' }}> (You)</span>}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600 }}>RANK {player?.userELO || 1200}</div>
+          </div>
+        </div>
+        <div style={{
+          padding: '6px 12px',
+          backgroundColor: isPlayerTurn ? '#f59e0b' : '#27272a',
+          color: isPlayerTurn ? '#09090b' : '#fff',
+          fontFamily: 'monospace',
+          fontSize: '18px',
+          fontWeight: 800,
+          borderRadius: '4px',
+          minWidth: '70px',
+          textAlign: 'center',
+          transition: 'all 0.15s ease'
+        }}>
+          {formatTime(timeLeft)}
         </div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '18px', fontWeight: 700, fontFamily: 'monospace' }}>
-        <LuClock size={16} style={{ color: 'var(--text-secondary)' }} /> {match.control_tiempo}
-      </div>
-    </div>
-  );
+    );
+  };
 
   if (match && match.estado === 'waiting') {
     const isWhite = Number(user?.id) === Number(match.jugador_blancas_id);
@@ -632,7 +704,7 @@ const GamePage = () => {
 
       {/* Chessboard Area */}
       <div>
-        <PlayerInfo player={opponent} />
+        <PlayerInfo player={opponent} color={userColor === 'white' ? 'black' : 'white'} />
         
         <div style={{ 
           border: '1px solid var(--border-color)', 
@@ -653,7 +725,7 @@ const GamePage = () => {
           />
         </div>
 
-        <PlayerInfo player={me} isBottom />
+        <PlayerInfo player={me} color={userColor} isBottom />
       </div>
 
       {/* Control Area */}

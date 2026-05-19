@@ -32,6 +32,9 @@ class MatchResponse(BaseModel):
     movimientos_pgn: Optional[str]
     creada_en: datetime
     finalizada_en: Optional[datetime]
+    tiempo_restante_blancas: Optional[float] = None
+    tiempo_restante_negras: Optional[float] = None
+    ultima_jugada_en: Optional[datetime] = None
 
 
 class EndMatchRequest(BaseModel):

@@ -20,6 +20,9 @@ class Match(SQLModel, table=True):
     movimientos_pgn: Optional[str] = Field(default=None) # TEXT in diagram
     creada_en: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     finalizada_en: Optional[datetime] = None
+    tiempo_restante_blancas: Optional[float] = Field(default=None)
+    tiempo_restante_negras: Optional[float] = Field(default=None)
+    ultima_jugada_en: Optional[datetime] = Field(default=None)
 
     # Relationships
     jugador_blancas: "Usuario" = Relationship(

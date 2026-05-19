@@ -102,33 +102,42 @@ async def match_websocket(websocket: WebSocket, matchID: int, session: Session =
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
         
+    import asyncio
     await websocket_manager.connect(matchID, websocket)
     try:
         while True:
-            data = await websocket.receive_text()
-            import json
             try:
-                msg = json.loads(data)
-                if msg.get("type") == "ping":
-                    await websocket.send_json({"type": "pong"})
-                elif msg.get("type") == "chat":
-                    await websocket_manager.broadcast_to_match(matchID, {
-                        "type": "chat",
-                        "username": user.nombre_usuario,
-                        "message": msg.get("message")
-                    })
-                elif msg.get("type") == "draw_offer":
-                    await websocket_manager.broadcast_to_match(matchID, {
-                        "type": "draw_offer",
-                        "offered_by": user.nombre_usuario
-                    })
-                elif msg.get("type") == "draw_declined":
-                    await websocket_manager.broadcast_to_match(matchID, {
-                        "type": "draw_declined",
-                        "declined_by": user.nombre_usuario
-                    })
-            except Exception:
-                pass
-
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=1.0)
+                import json
+                try:
+                    msg = json.loads(data)
+                    if msg.get("type") == "ping":
+                        await websocket.send_json({"type": "pong"})
+                    elif msg.get("type") == "chat":
+                        await websocket_manager.broadcast_to_match(matchID, {
+                            "type": "chat",
+                            "username": user.nombre_usuario,
+                            "message": msg.get("message")
+                        })
+                    elif msg.get("type") == "draw_offer":
+                        await websocket_manager.broadcast_to_match(matchID, {
+                            "type": "draw_offer",
+                            "offered_by": user.nombre_usuario
+                        })
+                    elif msg.get("type") == "draw_declined":
+                        await websocket_manager.broadcast_to_match(matchID, {
+                            "type": "draw_declined",
+                            "declined_by": user.nombre_usuario
+                        })
+                except Exception:
+                    pass
+            except asyncio.TimeoutError:
+                # Check for chess match time limits
+                from ..services.match_service import MatchService
+                service = MatchService(session)
+                timeout_payload = service.check_and_apply_timeout(matchID)
+                if timeout_payload:
+                    await websocket_manager.broadcast_to_match(matchID, timeout_payload)
+                    
     except WebSocketDisconnect:
         websocket_manager.disconnect(matchID, websocket)

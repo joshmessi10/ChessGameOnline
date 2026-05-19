@@ -28,6 +28,9 @@ class MatchService:
             raise HTTPException(status_code=404, detail="Match not found")
         if user_id not in (match.jugador_blancas_id, match.jugador_negras_id):
             raise HTTPException(status_code=403, detail="You are not a participant in this match")
+        self.check_and_apply_timeout(match.id)
+        # Fetch updated record
+        match = self.match_repo.find_by_id(match_id)
         return self._map_to_response(match)
 
     def _finalize_match_ratings_and_stats(self, match: Match, result: MatchResult) -> tuple:
@@ -186,6 +189,13 @@ class MatchService:
             raise HTTPException(status_code=403, detail="You are not the guest of this invitation")
 
         match.estado = MatchStatus.IN_PROGRESS
+        
+        # Parse time control and set initial times and last move timestamp
+        initial_seconds, _ = self._parse_control_tiempo(match.control_tiempo)
+        match.tiempo_restante_blancas = float(initial_seconds)
+        match.tiempo_restante_negras = float(initial_seconds)
+        match.ultima_jugada_en = datetime.now(timezone.utc)
+        
         updated = self.match_repo.update(match)
 
         broadcast_payload = {
@@ -193,7 +203,10 @@ class MatchService:
             "match_id": updated.id,
             "board_state": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
             "turn": "white",
-            "match_status": "in_progress"
+            "match_status": "in_progress",
+            "tiempo_restante_blancas": updated.tiempo_restante_blancas,
+            "tiempo_restante_negras": updated.tiempo_restante_negras,
+            "ultima_jugada_en": updated.ultima_jugada_en.isoformat() if updated.ultima_jugada_en else None
         }
 
         return {
@@ -239,6 +252,33 @@ class MatchService:
     def _map_to_response(self, match: Match) -> MatchResponse:
         user_w = self.user_repo.find_by_id(match.jugador_blancas_id)
         user_b = self.user_repo.find_by_id(match.jugador_negras_id)
+        
+        t_w = match.tiempo_restante_blancas
+        t_b = match.tiempo_restante_negras
+        
+        if match.estado == MatchStatus.IN_PROGRESS and match.ultima_jugada_en:
+            now = datetime.now(timezone.utc)
+            last_move_time = match.ultima_jugada_en.replace(tzinfo=timezone.utc) if match.ultima_jugada_en.tzinfo is None else match.ultima_jugada_en
+            elapsed = (now - last_move_time).total_seconds()
+            
+            # Reconstruct turn
+            board = chess.Board()
+            for mv in (match.movimientos_pgn or "").split():
+                try:
+                    board.push_san(mv)
+                except ValueError:
+                    try:
+                        board.push_uci(mv)
+                    except ValueError:
+                        pass
+            
+            if board.turn == chess.WHITE:
+                if t_w is not None:
+                    t_w = max(0.0, t_w - elapsed)
+            else:
+                if t_b is not None:
+                    t_b = max(0.0, t_b - elapsed)
+                    
         return MatchResponse(
             id=match.id,
             jugador_blancas_id=match.jugador_blancas_id,
@@ -251,7 +291,10 @@ class MatchService:
             estado=match.estado,
             movimientos_pgn=match.movimientos_pgn,
             creada_en=match.creada_en,
-            finalizada_en=match.finalizada_en
+            finalizada_en=match.finalizada_en,
+            tiempo_restante_blancas=t_w,
+            tiempo_restante_negras=t_b,
+            ultima_jugada_en=match.ultima_jugada_en
         )
 
 
@@ -278,6 +321,49 @@ class MatchService:
                     board.push_uci(mv)
                 except ValueError:
                     pass
+
+        # Calculate time elapsed and update active player clock
+        now = datetime.now(timezone.utc)
+        elapsed = 0.0
+        if match.ultima_jugada_en:
+            last_move_time = match.ultima_jugada_en.replace(tzinfo=timezone.utc) if match.ultima_jugada_en.tzinfo is None else match.ultima_jugada_en
+            elapsed = (now - last_move_time).total_seconds()
+            
+        _, increment = self._parse_control_tiempo(match.control_tiempo)
+        
+        new_elo_w = None
+        new_elo_b = None
+        change_w = 0
+        change_b = 0
+        
+        if color == "white":
+            if match.tiempo_restante_blancas is not None:
+                match.tiempo_restante_blancas = max(0.0, match.tiempo_restante_blancas - elapsed)
+                if match.tiempo_restante_blancas <= 0.0:
+                    match.tiempo_restante_blancas = 0.0
+                    match.estado = MatchStatus.FINISHED
+                    match.resultado = MatchResult.BLACK_WIN
+                    match.ganador_id = match.jugador_negras_id
+                    match.finalizada_en = now
+                    new_elo_w, new_elo_b, change_w, change_b = self._finalize_match_ratings_and_stats(match, match.resultado)
+                    self.match_repo.update(match)
+                    raise HTTPException(status_code=400, detail="White lost on time")
+                match.tiempo_restante_blancas += increment
+        else:
+            if match.tiempo_restante_negras is not None:
+                match.tiempo_restante_negras = max(0.0, match.tiempo_restante_negras - elapsed)
+                if match.tiempo_restante_negras <= 0.0:
+                    match.tiempo_restante_negras = 0.0
+                    match.estado = MatchStatus.FINISHED
+                    match.resultado = MatchResult.WHITE_WIN
+                    match.ganador_id = match.jugador_blancas_id
+                    match.finalizada_en = now
+                    new_elo_w, new_elo_b, change_w, change_b = self._finalize_match_ratings_and_stats(match, match.resultado)
+                    self.match_repo.update(match)
+                    raise HTTPException(status_code=400, detail="Black lost on time")
+                match.tiempo_restante_negras += increment
+
+        match.ultima_jugada_en = now
                     
         # Validate and apply move
         result = ChessEngine.validate_move(board.fen(), request.move, color)
@@ -290,11 +376,6 @@ class MatchService:
         
         # Detect status
         status = ChessEngine.detect_status(result["newBoardState"])
-        
-        new_elo_w = None
-        new_elo_b = None
-        change_w = 0
-        change_b = 0
 
         if status["isCheckmate"]:
             match.estado = MatchStatus.FINISHED
@@ -325,14 +406,17 @@ class MatchService:
             "is_checkmate": status["isCheckmate"],
             "is_draw": status["isDraw"],
             "turn": next_turn,
-            "match_status": match.estado,
+            "match_status": match.estado.value if hasattr(match.estado, "value") else match.estado,
             "winner_id": match.ganador_id,
-            "resultado": match.resultado,
+            "resultado": match.resultado.value if hasattr(match.resultado, "value") else match.resultado,
             "movimientos_pgn": match.movimientos_pgn,
             "newELOPlayerWhite": new_elo_w,
             "newELOPlayerBlack": new_elo_b,
             "eloChangePlayerWhite": change_w,
-            "eloChangePlayerBlack": change_b
+            "eloChangePlayerBlack": change_b,
+            "tiempo_restante_blancas": match.tiempo_restante_blancas,
+            "tiempo_restante_negras": match.tiempo_restante_negras,
+            "ultima_jugada_en": match.ultima_jugada_en.isoformat() if match.ultima_jugada_en else None
         }
         
         return {
@@ -389,4 +473,82 @@ class MatchService:
                     "is_my_turn": is_my_turn
                 })
         return results
+
+    def _parse_control_tiempo(self, control: str) -> tuple[int, int]:
+        try:
+            parts = control.split("+")
+            minutes = int(parts[0])
+            increment = int(parts[1]) if len(parts) > 1 else 0
+            return minutes * 60, increment
+        except Exception:
+            return 600, 0
+
+    def check_and_apply_timeout(self, match_id: int) -> Optional[dict]:
+        match = self.match_repo.find_by_id(match_id)
+        if not match or match.estado != MatchStatus.IN_PROGRESS:
+            return None
+            
+        now = datetime.now(timezone.utc)
+        elapsed = 0.0
+        if match.ultima_jugada_en:
+            last_move_time = match.ultima_jugada_en.replace(tzinfo=timezone.utc) if match.ultima_jugada_en.tzinfo is None else match.ultima_jugada_en
+            elapsed = (now - last_move_time).total_seconds()
+            
+        # Reconstruct turn
+        board = chess.Board()
+        for mv in (match.movimientos_pgn or "").split():
+            try:
+                board.push_san(mv)
+            except ValueError:
+                try:
+                    board.push_uci(mv)
+                except ValueError:
+                    pass
+                    
+        is_white_turn = board.turn == chess.WHITE
+        
+        timed_out = False
+        result = None
+        winner_id = None
+        
+        if is_white_turn:
+            if match.tiempo_restante_blancas is not None:
+                remaining = match.tiempo_restante_blancas - elapsed
+                if remaining <= 0.0:
+                    match.tiempo_restante_blancas = 0.0
+                    match.estado = MatchStatus.FINISHED
+                    match.resultado = MatchResult.BLACK_WIN
+                    match.ganador_id = match.jugador_negras_id
+                    match.finalizada_en = now
+                    timed_out = True
+                    result = MatchResult.BLACK_WIN
+                    winner_id = match.jugador_negras_id
+        else:
+            if match.tiempo_restante_negras is not None:
+                remaining = match.tiempo_restante_negras - elapsed
+                if remaining <= 0.0:
+                    match.tiempo_restante_negras = 0.0
+                    match.estado = MatchStatus.FINISHED
+                    match.resultado = MatchResult.WHITE_WIN
+                    match.ganador_id = match.jugador_blancas_id
+                    match.finalizada_en = now
+                    timed_out = True
+                    result = MatchResult.WHITE_WIN
+                    winner_id = match.jugador_blancas_id
+                    
+        if timed_out:
+            new_rw, new_rb, change_w, change_b = self._finalize_match_ratings_and_stats(match, result)
+            self.match_repo.update(match)
+            return {
+                "type": "match_ended",
+                "reason": "timeout",
+                "winner_id": winner_id,
+                "resultado": result.value if hasattr(result, "value") else result,
+                "newELOPlayerWhite": new_rw,
+                "newELOPlayerBlack": new_rb,
+                "eloChangePlayerWhite": change_w,
+                "eloChangePlayerBlack": change_b
+            }
+            
+        return None
 
