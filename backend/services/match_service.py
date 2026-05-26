@@ -139,8 +139,9 @@ class MatchService:
         broadcast_payload = {
             "type": "match_ended",
             "reason": request.reason,
+            "end_reason": request.reason,
             "winner_id": match.ganador_id,
-            "resultado": match.resultado,
+            "resultado": match.resultado.value if hasattr(match.resultado, "value") else match.resultado,
             "newELOPlayerWhite": new_rw,
             "newELOPlayerBlack": new_rb,
             "eloChangePlayerWhite": change_w,
@@ -185,8 +186,8 @@ class MatchService:
             raise HTTPException(status_code=404, detail="Invitation match not found")
         if match.estado != MatchStatus.WAITING:
             raise HTTPException(status_code=400, detail="Match is already in progress, finished, or cancelled")
-        if match.jugador_negras_id != user_id:
-            raise HTTPException(status_code=403, detail="You are not the guest of this invitation")
+        if user_id not in (match.jugador_blancas_id, match.jugador_negras_id):
+            raise HTTPException(status_code=403, detail="You are not a participant in this invitation")
 
         match.estado = MatchStatus.IN_PROGRESS
         
@@ -226,8 +227,8 @@ class MatchService:
             raise HTTPException(status_code=404, detail="Invitation match not found")
         if match.estado != MatchStatus.WAITING:
             raise HTTPException(status_code=400, detail="Match is already in progress, finished, or cancelled")
-        if match.jugador_negras_id != user_id:
-            raise HTTPException(status_code=403, detail="You are not the guest of this invitation")
+        if user_id not in (match.jugador_blancas_id, match.jugador_negras_id):
+            raise HTTPException(status_code=403, detail="You are not a participant in this invitation")
 
         match.estado = MatchStatus.CANCELLED
         updated = self.match_repo.update(match)
@@ -377,9 +378,11 @@ class MatchService:
         # Detect status
         status = ChessEngine.detect_status(result["newBoardState"])
 
+        end_reason = None
         if status["isCheckmate"]:
             match.estado = MatchStatus.FINISHED
             match.finalizada_en = datetime.now(timezone.utc)
+            end_reason = "checkmate"
             if color == "white":
                 match.resultado = MatchResult.WHITE_WIN
                 match.ganador_id = match.jugador_blancas_id
@@ -391,6 +394,7 @@ class MatchService:
             match.estado = MatchStatus.FINISHED
             match.finalizada_en = datetime.now(timezone.utc)
             match.resultado = MatchResult.DRAW
+            end_reason = "stalemate" if status.get("isStalemate") else "draw"
             new_elo_w, new_elo_b, change_w, change_b = self._finalize_match_ratings_and_stats(match, match.resultado)
             
         self.match_repo.update(match)
@@ -405,6 +409,7 @@ class MatchService:
             "board_state": result["newBoardState"],
             "is_checkmate": status["isCheckmate"],
             "is_draw": status["isDraw"],
+            "end_reason": end_reason,
             "turn": next_turn,
             "match_status": match.estado.value if hasattr(match.estado, "value") else match.estado,
             "winner_id": match.ganador_id,
@@ -542,6 +547,7 @@ class MatchService:
             return {
                 "type": "match_ended",
                 "reason": "timeout",
+                "end_reason": "timeout",
                 "winner_id": winner_id,
                 "resultado": result.value if hasattr(result, "value") else result,
                 "newELOPlayerWhite": new_rw,

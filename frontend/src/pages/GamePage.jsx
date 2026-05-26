@@ -6,7 +6,7 @@ import { LuFlag, LuRotateCcw, LuUser, LuClock, LuMessageSquare, LuX, LuSend, LuS
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import api from '../api/auth';
-import { getPlayerColor } from '../utils/match';
+import { getPlayerColor, getUserOutcome, isMatchFinished } from '../utils/match';
 
 const GamePage = () => {
   const { matchId } = useParams();
@@ -196,19 +196,21 @@ const GamePage = () => {
           }));
 
           if (data.match_status === 'finished') {
-            // If match finished from checkmate or draw
             const color = getPlayerColor(userRef.current?.id, matchRef.current);
             const eloDiff = color === 'white' ? data.eloChangePlayerWhite : data.eloChangePlayerBlack;
-            
+            const endReason = data.end_reason
+              || (data.is_checkmate ? 'checkmate' : data.is_draw ? 'draw' : null);
+
             setTimeout(() => {
-              navigate('/result', { 
-                state: { 
-                  matchData: { 
-                    resultado: data.resultado, 
-                    color_usuario: color === 'white' ? 'white' : 'black' 
-                  }, 
-                  eloDiff 
-                } 
+              navigate('/result', {
+                state: {
+                  matchData: {
+                    resultado: data.resultado,
+                    color_usuario: color === 'white' ? 'white' : 'black',
+                    end_reason: endReason,
+                  },
+                  eloDiff,
+                },
               });
             }, 1500);
           }
@@ -242,10 +244,11 @@ const GamePage = () => {
             state: {
               matchData: {
                 resultado: data.resultado,
-                color_usuario: color === 'white' ? 'white' : 'black'
+                color_usuario: color === 'white' ? 'white' : 'black',
+                end_reason: data.end_reason || data.reason,
               },
-              eloDiff
-            }
+              eloDiff,
+            },
           });
         } else if (data.type === 'draw_offer') {
           if (data.offered_by !== (userRef.current?.nombre_usuario || userRef.current?.username)) {
@@ -339,9 +342,20 @@ const GamePage = () => {
       // Call API
       const response = await api.post(`/match/${matchId}/move`, { move: uciMove });
       
-      // Update with exact state from server
       const newGame = new Chess(response.data.board_state);
       setGame(newGame);
+
+      if (response.data.is_checkmate || response.data.is_draw) {
+        const color = getPlayerColor(user?.id, match);
+        setMatch(prev => prev ? {
+          ...prev,
+          estado: 'finished',
+          resultado: response.data.is_draw
+            ? 'draw'
+            : (color === 'white' ? 'white_win' : 'black_win'),
+        } : prev);
+      }
+
       return true;
     } catch (err) {
       // Revert FEN silently on error (no browser alert popups!)
@@ -548,6 +562,9 @@ const GamePage = () => {
   }
 
   const userColor = getPlayerColor(user?.id, match);
+  const matchOutcome = getUserOutcome(user?.id, match);
+  const matchFinished = isMatchFinished(match);
+
   if (!userColor) {
     return (
       <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
@@ -555,7 +572,9 @@ const GamePage = () => {
       </div>
     );
   }
-  const myTurn = (game.turn() === 'w' && userColor === 'white') || (game.turn() === 'b' && userColor === 'black');
+  const myTurn = !matchFinished && (
+    (game.turn() === 'w' && userColor === 'white') || (game.turn() === 'b' && userColor === 'black')
+  );
   
   // Arrange players (Opponent on top, Current User on bottom)
   const opponent = userColor === 'white' ? blackPlayer : whitePlayer;
@@ -623,7 +642,7 @@ const GamePage = () => {
 
   if (match && match.estado === 'waiting') {
     const isWhite = userColor === 'white';
-    const opponentName = isWhite ? blackPlayer?.nombre_usuario : whitePlayer?.nombre_usuario;
+    const opponentName = (whitePlayer?.nombre_usuario === user?.nombre_usuario || whitePlayer?.nombre_usuario === user?.username) ? blackPlayer?.nombre_usuario : whitePlayer?.nombre_usuario;
 
     return (
       <div className="fade-in" style={{
@@ -807,12 +826,20 @@ const GamePage = () => {
             Match ID: #{match.id}
           </p>
           <div style={{ marginTop: '8px', fontSize: '12px', fontWeight: 800 }}>
-            {match.estado === 'in_progress' ? (
+            {matchOutcome ? (
+              <span style={{
+                color: matchOutcome === 'Victory'
+                  ? 'var(--success-color)'
+                  : matchOutcome === 'Defeat'
+                    ? 'var(--error-color)'
+                    : '#f59e0b',
+              }}>
+                {matchOutcome.toUpperCase()}
+              </span>
+            ) : (
               <span style={{ color: myTurn ? 'var(--success-color)' : 'var(--text-secondary)' }}>
                 {myTurn ? 'YOUR TURN' : "OPPONENT'S TURN"}
               </span>
-            ) : (
-              <span style={{ color: 'var(--error-color)' }}>MATCH FINISHED ({match.resultado})</span>
             )}
           </div>
           {!wsConnected && (
