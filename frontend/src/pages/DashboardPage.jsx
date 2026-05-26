@@ -77,8 +77,7 @@ const DashboardPage = () => {
           Play Chess Online on the <span style={{ fontStyle: 'italic' }}>Elite</span> Site.
         </h1>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', color: 'var(--text-secondary)', fontSize: '15px', fontWeight: 500, letterSpacing: '0.02em', marginBottom: '3rem' }}>
-          <span><strong style={{ color: 'var(--text-primary)' }}>24,930</strong> Games Today</span>
-          <span><strong style={{ color: 'var(--text-primary)' }}>1,042</strong> Playing Now</span>
+
         </div>
         
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
@@ -104,7 +103,7 @@ const DashboardPage = () => {
         <StatCard label="Live Rating" value={elo} icon={LuTrendingUp} color="#f59e0b" />
         <StatCard label="Victories" value={stats?.victorias || 0} icon={LuTrophy} color="var(--success-color)" />
         <StatCard label="Total Matches" value={stats?.partidas_jugadas || 0} icon={LuHistory} />
-        <StatCard label="Social Rank" value="Global" icon={LuUsers} />
+        
       </div>
 
       {/* Active Ongoing Games */}
