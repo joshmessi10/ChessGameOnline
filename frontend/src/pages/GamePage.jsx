@@ -6,11 +6,12 @@ import { LuFlag, LuRotateCcw, LuUser, LuClock, LuMessageSquare, LuX, LuSend } fr
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import api from '../api/auth';
+import { getPlayerColor } from '../utils/match';
 
 const GamePage = () => {
   const { matchId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { showToast } = useToast();
   const [game, setGame] = useState(new Chess());
   const [moveCount, setMoveCount] = useState(0);
@@ -45,6 +46,20 @@ const GamePage = () => {
   useEffect(() => {
     userRef.current = user;
   }, [user]);
+
+  // Backfill user.id if session only has token (legacy login path).
+  useEffect(() => {
+    if (!user?.token || user?.id != null) return;
+
+    let cancelled = false;
+    api.get('/profile/me')
+      .then(({ data }) => {
+        if (!cancelled) updateUser(data);
+      })
+      .catch(() => {});
+
+    return () => { cancelled = true; };
+  }, [user?.token, user?.id, updateUser]);
 
   const wsRef = useRef(null);
   const [selectedSquare, setSelectedSquare] = useState(null);
@@ -182,15 +197,15 @@ const GamePage = () => {
 
           if (data.match_status === 'finished') {
             // If match finished from checkmate or draw
-            const isWhite = Number(userRef.current?.id) === Number(matchRef.current?.jugador_blancas_id);
-            const eloDiff = isWhite ? data.eloChangePlayerWhite : data.eloChangePlayerBlack;
+            const color = getPlayerColor(userRef.current?.id, matchRef.current);
+            const eloDiff = color === 'white' ? data.eloChangePlayerWhite : data.eloChangePlayerBlack;
             
             setTimeout(() => {
               navigate('/result', { 
                 state: { 
                   matchData: { 
                     resultado: data.resultado, 
-                    color_usuario: isWhite ? 'white' : 'black' 
+                    color_usuario: color === 'white' ? 'white' : 'black' 
                   }, 
                   eloDiff 
                 } 
@@ -198,20 +213,36 @@ const GamePage = () => {
             }, 1500);
           }
         } else if (data.type === 'match_started') {
+          if (data.board_state) {
+            setGame(new Chess(data.board_state));
+            setMoveCount(0);
+          }
+          if (data.tiempo_restante_blancas != null) {
+            setTimeLeftWhite(data.tiempo_restante_blancas);
+            setTimeLeftBlack(data.tiempo_restante_negras);
+            lastMoveTimeRef.current = data.ultima_jugada_en ? new Date(data.ultima_jugada_en) : new Date();
+          }
+          setMatch(prev => prev ? {
+            ...prev,
+            estado: data.match_status || 'in_progress',
+            tiempo_restante_blancas: data.tiempo_restante_blancas,
+            tiempo_restante_negras: data.tiempo_restante_negras,
+            ultima_jugada_en: data.ultima_jugada_en,
+          } : prev);
           loadGameData();
         } else if (data.type === 'match_cancelled') {
           showToast('The challenge was cancelled or declined.', { type: 'info' });
           navigate('/friends');
         } else if (data.type === 'match_ended') {
           // Handle resignation/draw agreement
-          const isWhite = Number(userRef.current?.id) === Number(matchRef.current?.jugador_blancas_id);
-          const eloDiff = isWhite ? data.eloChangePlayerWhite : data.eloChangePlayerBlack;
+          const color = getPlayerColor(userRef.current?.id, matchRef.current);
+          const eloDiff = color === 'white' ? data.eloChangePlayerWhite : data.eloChangePlayerBlack;
           
           navigate('/result', {
             state: {
               matchData: {
                 resultado: data.resultado,
-                color_usuario: isWhite ? 'white' : 'black'
+                color_usuario: color === 'white' ? 'white' : 'black'
               },
               eloDiff
             }
@@ -327,7 +358,8 @@ const GamePage = () => {
     const piece = game.get(source);
     if (!piece) return false;
 
-    const userColor = Number(user?.id) === Number(match.jugador_blancas_id) ? 'white' : 'black';
+    const userColor = getPlayerColor(user?.id, match);
+    if (!userColor) return false;
     if ((piece.color === 'w' && userColor === 'black') || (piece.color === 'b' && userColor === 'white')) {
       return false;
     }
@@ -346,7 +378,8 @@ const GamePage = () => {
   const onSquareClick = async (square) => {
     if (!match || match.estado !== 'in_progress') return;
 
-    const userColor = Number(user?.id) === Number(match.jugador_blancas_id) ? 'white' : 'black';
+    const userColor = getPlayerColor(user?.id, match);
+    if (!userColor) return;
     const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
 
     // Only allow selecting and moving on your turn
@@ -431,7 +464,8 @@ const GamePage = () => {
   const isDraggablePiece = ({ piece }) => {
     if (!match || match.estado !== 'in_progress') return false;
 
-    const userColor = Number(user?.id) === Number(match.jugador_blancas_id) ? 'white' : 'black';
+    const userColor = getPlayerColor(user?.id, match);
+    if (!userColor) return false;
     const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
     
     // Only draggable on your turn
@@ -503,7 +537,9 @@ const GamePage = () => {
     setChatInput('');
   };
 
-  if (loading || !user) {
+  const hasPlayerId = user?.id != null;
+
+  if (loading || !user || (user?.token && !hasPlayerId)) {
     return (
       <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
         Entering game lobby...
@@ -511,7 +547,14 @@ const GamePage = () => {
     );
   }
 
-  const userColor = Number(user?.id) === Number(match.jugador_blancas_id) ? 'white' : 'black';
+  const userColor = getPlayerColor(user?.id, match);
+  if (!userColor) {
+    return (
+      <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
+        Could not determine your side for this match.
+      </div>
+    );
+  }
   const myTurn = (game.turn() === 'w' && userColor === 'white') || (game.turn() === 'b' && userColor === 'black');
   
   // Arrange players (Opponent on top, Current User on bottom)
@@ -579,7 +622,7 @@ const GamePage = () => {
   };
 
   if (match && match.estado === 'waiting') {
-    const isWhite = Number(user?.id) === Number(match.jugador_blancas_id);
+    const isWhite = userColor === 'white';
     const opponentName = isWhite ? blackPlayer?.nombre_usuario : whitePlayer?.nombre_usuario;
 
     return (
