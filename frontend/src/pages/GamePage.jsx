@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Chessboard } from 'react-chessboard';
 import { Chess } from 'chess.js';
-import { LuFlag, LuRotateCcw, LuUser, LuClock, LuMessageSquare, LuX, LuSend } from 'react-icons/lu';
+import { LuFlag, LuRotateCcw, LuUser, LuClock, LuMessageSquare, LuX, LuSend, LuSwords, LuHandshake, LuLoader } from 'react-icons/lu';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import api from '../api/auth';
@@ -636,7 +636,9 @@ const GamePage = () => {
           display: 'flex', flexDirection: 'column', gap: '2rem',
           boxShadow: '0 20px 50px rgba(0,0,0,0.6)'
         }}>
-          <div style={{ fontSize: '64px', animation: 'pulse 2s infinite' }}>⚔️</div>
+          <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--text-secondary)' }}>
+            <LuSwords size={48} style={{ animation: 'pulse 2s infinite' }} />
+          </div>
           <div>
             <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '0.5rem' }}>Challenge Pending</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
@@ -721,7 +723,9 @@ const GamePage = () => {
           }}>
             {overlayState === 'confirm_resign' && (
               <>
-                <div style={{ fontSize: '48px' }}>🏳️</div>
+                <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--error-color)' }}>
+                  <LuFlag size={40} />
+                </div>
                 <div>
                   <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '0.5rem' }}>Resign Match?</h3>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>You will lose ELO rating points immediately.</p>
@@ -734,7 +738,9 @@ const GamePage = () => {
             )}
             {overlayState === 'draw_offered' && (
               <>
-                <div style={{ fontSize: '48px' }}>🤝</div>
+                <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--text-primary)' }}>
+                  <LuHandshake size={40} />
+                </div>
                 <div>
                   <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '0.5rem' }}>Draw Offered</h3>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
@@ -743,13 +749,15 @@ const GamePage = () => {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <button onClick={handleDeclineDraw} className="secondary-btn" style={{ padding: '10px', color: 'var(--error-color)' }}>Decline</button>
-                  <button onClick={handleAcceptDraw} className="primary-btn" style={{ padding: '10px' }}>Accept 🤝</button>
+                  <button onClick={handleAcceptDraw} className="primary-btn" style={{ padding: '10px' }}>Accept</button>
                 </div>
               </>
             )}
             {overlayState === 'draw_sent' && (
               <>
-                <div style={{ fontSize: '48px', animation: 'pulse 1.5s infinite' }}>⌛</div>
+                <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--text-secondary)' }}>
+                  <LuClock size={40} style={{ animation: 'pulse 1.5s infinite' }} />
+                </div>
                 <div>
                   <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '0.5rem' }}>Draw Offer Sent</h3>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Waiting for opponent to accept or decline the offer...</p>
@@ -801,7 +809,7 @@ const GamePage = () => {
           <div style={{ marginTop: '8px', fontSize: '12px', fontWeight: 800 }}>
             {match.estado === 'in_progress' ? (
               <span style={{ color: myTurn ? 'var(--success-color)' : 'var(--text-secondary)' }}>
-                {myTurn ? "⚡ YOUR TURN" : "⌛ OPPONENT'S TURN"}
+                {myTurn ? 'YOUR TURN' : "OPPONENT'S TURN"}
               </span>
             ) : (
               <span style={{ color: 'var(--error-color)' }}>MATCH FINISHED ({match.resultado})</span>
@@ -820,7 +828,7 @@ const GamePage = () => {
               alignItems: 'center',
               gap: '8px'
             }}>
-              <span className="spin" style={{ display: 'inline-block' }}>⌛</span>
+              <LuLoader size={14} className="spin" />
               Reconnecting to game server...
             </div>
           )}

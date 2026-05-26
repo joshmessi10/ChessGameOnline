@@ -173,7 +173,7 @@ const FriendsPage = () => {
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                 <button onClick={() => setChallengeFriend({ id: f.amigo_id, name: f.amigo_name })} className="primary-btn" style={{ fontSize: '11px', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  Challenge ⚔️
+                  Challenge
                 </button>
                 <Link to={`/profile/${f.amigo_id}`} className="secondary-btn" style={{ fontSize: '11px', padding: '6px 12px' }}>View</Link>
                 <button onClick={() => removeFriend(f.amigo_id, f.amigo_name)} style={{ backgroundColor: 'transparent', color: 'var(--error-color)', fontSize: '11px', fontWeight: 600, paddingLeft: '8px' }}>Remove</button>
@@ -216,7 +216,7 @@ const FriendsPage = () => {
               ) : gameInvites.map(inv => (
                 <div key={inv.id} style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#09090b' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ width: '40px', height: '40px', backgroundColor: '#f59e0b', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 900 }}>⚔️</div>
+                    <div style={{ width: '40px', height: '40px', backgroundColor: '#f59e0b', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 900, letterSpacing: '0.05em' }}>VS</div>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: '15px' }}>{inv.inviter_username} <span style={{ color: '#f59e0b', fontSize: '12px' }}>({inv.inviter_elo} ELO)</span></div>
                       <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Challenged you to {inv.modo.toUpperCase()} ({inv.control_tiempo})</div>
