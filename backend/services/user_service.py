@@ -93,8 +93,8 @@ class UserService:
             matchHistory=history
         )
 
-    def search_users(self, query: str) -> UserSearchResponse:
-        users = self.user_repo.search_users(query)
+    def search_users(self, query: str, current_user_id: int) -> UserSearchResponse:
+        users = self.user_repo.search_users(query, exclude_user_id=current_user_id)
         results = []
         for u in users:
             blitz_r = self.rating_repo.find_by_usuario_and_modo(u.id, MatchType.BLITZ)

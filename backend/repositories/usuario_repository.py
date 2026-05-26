@@ -17,8 +17,10 @@ class UsuarioRepository:
         statement = select(Usuario).where(Usuario.nombre_usuario == username)
         return self.session.exec(statement).first()
 
-    def search_users(self, query: str) -> List[Usuario]:
-        statement = select(Usuario).where(Usuario.nombre_usuario.contains(query))
+    def search_users(self, query: str, exclude_user_id: Optional[int] = None) -> List[Usuario]:
+        statement = select(Usuario).where(Usuario.nombre_usuario.ilike(f'%{query}%'))
+        if exclude_user_id is not None:
+            statement = statement.where(Usuario.id != exclude_user_id)
         return self.session.exec(statement).all()
 
     def save(self, user: Usuario) -> Usuario:
