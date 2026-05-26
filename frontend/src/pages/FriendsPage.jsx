@@ -4,6 +4,8 @@ import api from '../api/auth';
 import { LuUsers, LuUserPlus, LuMail, LuUserX, LuCheck, LuArrowRight } from 'react-icons/lu';
 import FieldError from '../components/FieldError';
 import { validateSearchQuery } from '../utils/validation';
+import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 const TabButton = ({ active, onClick, icon: Icon, children, count }) => (
   <button onClick={onClick} style={{
@@ -30,6 +32,8 @@ const TabButton = ({ active, onClick, icon: Icon, children, count }) => (
 
 const FriendsPage = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const [tab, setTab] = useState('friends');
   const [friends, setFriends] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -79,23 +83,32 @@ const FriendsPage = () => {
     try {
       await api.post(`/friends/request?targetID=${userId}`);
       setSentRequests(p => ({ ...p, [userId]: true }));
-    } catch { alert('Operation failed.'); }
+    } catch {
+      showToast('Could not send friend request. It may already be pending.');
+    }
   };
 
   const acceptRequest = async (id) => {
     try { await api.put(`/friends/${id}/accept`); fetchFriends(); }
-    catch { alert('Accept failed.'); }
+    catch { showToast('Could not accept the friend request.'); }
   };
 
   const rejectRequest = async (id) => {
     try { await api.delete(`/friends/${id}/reject`); fetchFriends(); }
-    catch { alert('Reject failed.'); }
+    catch { showToast('Could not decline the friend request.'); }
   };
 
-  const removeFriend = async (id) => {
-    if (!confirm('Dissolve this connection?')) return;
+  const removeFriend = async (id, friendName) => {
+    const ok = await confirm({
+      title: 'Remove connection',
+      message: `Remove ${friendName || 'this player'} from your friends?`,
+      confirmLabel: 'Remove',
+      cancelLabel: 'Cancel',
+      danger: true,
+    });
+    if (!ok) return;
     try { await api.delete(`/friends/${id}`); fetchFriends(); }
-    catch { alert('Removal failed.'); }
+    catch { showToast('Could not remove this connection.'); }
   };
 
   const handleSendChallenge = async () => {
@@ -109,7 +122,7 @@ const FriendsPage = () => {
       setChallengeFriend(null);
       navigate(`/play/${data.id}`);
     } catch {
-      alert('Failed to initiate challenge invitation.');
+      showToast('Could not send the challenge invitation.');
     }
   };
 
@@ -118,7 +131,7 @@ const FriendsPage = () => {
       await api.put(`/match/invite/${inviteID}/accept`);
       navigate(`/play/${inviteID}`);
     } catch {
-      alert('Failed to accept game invitation.');
+      showToast('Could not accept the game challenge.');
     }
   };
 
@@ -127,7 +140,7 @@ const FriendsPage = () => {
       await api.delete(`/match/invite/${inviteID}/decline`);
       fetchFriends();
     } catch {
-      alert('Failed to decline game invitation.');
+      showToast('Could not decline the game challenge.');
     }
   };
 
@@ -163,7 +176,7 @@ const FriendsPage = () => {
                   Challenge ⚔️
                 </button>
                 <Link to={`/profile/${f.amigo_id}`} className="secondary-btn" style={{ fontSize: '11px', padding: '6px 12px' }}>View</Link>
-                <button onClick={() => removeFriend(f.amigo_id)} style={{ backgroundColor: 'transparent', color: 'var(--error-color)', fontSize: '11px', fontWeight: 600, paddingLeft: '8px' }}>Remove</button>
+                <button onClick={() => removeFriend(f.amigo_id, f.amigo_name)} style={{ backgroundColor: 'transparent', color: 'var(--error-color)', fontSize: '11px', fontWeight: 600, paddingLeft: '8px' }}>Remove</button>
               </div>
             </div>
           ))}

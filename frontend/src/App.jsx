@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
+import { ConfirmProvider } from './context/ConfirmContext';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -21,6 +23,8 @@ import SettingsPage from './pages/SettingsPage';
 const App = () => {
   return (
     <AuthProvider>
+      <ToastProvider>
+        <ConfirmProvider>
       <Router>
         <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg-color)', color: 'var(--text-primary)' }}>
           <Navbar />
@@ -67,6 +71,8 @@ const App = () => {
           </main>
         </div>
       </Router>
+        </ConfirmProvider>
+      </ToastProvider>
     </AuthProvider>
   );
 };

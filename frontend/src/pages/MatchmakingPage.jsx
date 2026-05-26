@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/auth';
+import { useToast } from '../context/ToastContext';
 import { LuZap, LuFlame, LuClock, LuCrown, LuLoader, LuX } from 'react-icons/lu';
 
 const ModeCard = ({ m, active, onClick }) => (
@@ -33,6 +34,7 @@ const ModeCard = ({ m, active, onClick }) => (
 
 const MatchmakingPage = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [mode, setMode] = useState(null);
   const [searching, setSearching] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -74,7 +76,7 @@ const MatchmakingPage = () => {
       setElapsed(0);
       setSearching(true);
     } catch {
-      alert('Network error. Check connection.');
+      showToast('Could not join matchmaking. Check your connection and try again.');
     }
   };
 

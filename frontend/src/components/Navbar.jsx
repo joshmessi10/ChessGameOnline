@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import api from '../api/auth';
 import { LuPlay, LuUsers, LuUser, LuLogOut, LuSearch, LuTrendingUp, LuSettings } from 'react-icons/lu';
 
@@ -9,6 +10,7 @@ const Navbar = () => {
     user, logout, 
     incomingInvites, activeInviteNotification, setActiveInviteNotification 
   } = useAuth();
+  const { showToast } = useToast();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -22,7 +24,7 @@ const Navbar = () => {
       setActiveInviteNotification(null);
       navigate(`/play/${invite.id}`);
     } catch {
-      alert("Failed to accept challenge.");
+      showToast('Could not accept the challenge.');
     }
   };
 
@@ -31,7 +33,7 @@ const Navbar = () => {
       await api.delete(`/match/invite/${invite.id}/decline`);
       setActiveInviteNotification(null);
     } catch {
-      alert("Failed to decline challenge.");
+      showToast('Could not decline the challenge.');
     }
   };
 

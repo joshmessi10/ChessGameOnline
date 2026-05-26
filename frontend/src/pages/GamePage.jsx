@@ -4,12 +4,14 @@ import { Chessboard } from 'react-chessboard';
 import { Chess } from 'chess.js';
 import { LuFlag, LuRotateCcw, LuUser, LuClock, LuMessageSquare, LuX, LuSend } from 'react-icons/lu';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import api from '../api/auth';
 
 const GamePage = () => {
   const { matchId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [game, setGame] = useState(new Chess());
   const [moveCount, setMoveCount] = useState(0);
   const [match, setMatch] = useState(null);
@@ -31,6 +33,7 @@ const GamePage = () => {
   const [drawOfferFrom, setDrawOfferFrom] = useState('');
 
   const [wsConnected, setWsConnected] = useState(true);
+  const [cancelChallengeError, setCancelChallengeError] = useState('');
 
   const matchRef = useRef(match);
   const userRef = useRef(user);
@@ -97,7 +100,7 @@ const GamePage = () => {
       setLoading(false);
     } catch (err) {
       console.error(err);
-      alert("Failed to load match details.");
+      showToast('Could not load match details.');
       navigate('/dashboard');
     }
   };
@@ -197,7 +200,7 @@ const GamePage = () => {
         } else if (data.type === 'match_started') {
           loadGameData();
         } else if (data.type === 'match_cancelled') {
-          alert('The challenge has been cancelled or declined.');
+          showToast('The challenge was cancelled or declined.', { type: 'info' });
           navigate('/friends');
         } else if (data.type === 'match_ended') {
           // Handle resignation/draw agreement
@@ -220,7 +223,7 @@ const GamePage = () => {
           }
         } else if (data.type === 'draw_declined') {
           if (data.declined_by !== (userRef.current?.nombre_usuario || userRef.current?.username)) {
-            alert(`Your draw offer was declined by ${data.declined_by}.`);
+            showToast(`Your draw offer was declined by ${data.declined_by}.`, { type: 'info' });
             setOverlayState(null);
           }
         } else if (data.type === 'chat') {
@@ -459,7 +462,7 @@ const GamePage = () => {
       await api.put(`/match/${matchId}/end`, { reason: 'resignation' });
     } catch (err) {
       console.error(err);
-      alert("Failed to resign.");
+      showToast('Could not resign from the match.');
     }
   };
 
@@ -479,7 +482,7 @@ const GamePage = () => {
       await api.put(`/match/${matchId}/end`, { reason: 'draw_agreement' });
     } catch (err) {
       console.error(err);
-      alert("Failed to agree on draw.");
+      showToast('Could not accept the draw agreement.');
     }
   };
 
@@ -578,7 +581,6 @@ const GamePage = () => {
   if (match && match.estado === 'waiting') {
     const isWhite = Number(user?.id) === Number(match.jugador_blancas_id);
     const opponentName = isWhite ? blackPlayer?.nombre_usuario : whitePlayer?.nombre_usuario;
-    const opponentELO = isWhite ? blackPlayer?.userELO : whitePlayer?.userELO;
 
     return (
       <div className="fade-in" style={{
@@ -608,12 +610,26 @@ const GamePage = () => {
             <div style={{ fontSize: '14px', color: '#f59e0b', fontWeight: 700 }}>Time Control: {match.control_tiempo}</div>
           </div>
 
+          {cancelChallengeError && (
+            <div style={{
+              padding: '12px',
+              fontSize: '13px',
+              fontWeight: 600,
+              color: 'var(--error-color)',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid var(--error-color)',
+            }}>
+              {cancelChallengeError}
+            </div>
+          )}
+
           <button onClick={async () => {
+            setCancelChallengeError('');
             try {
               await api.delete(`/match/invite/${match.id}/decline`);
               navigate('/friends');
             } catch {
-              alert('Failed to cancel the challenge.');
+              setCancelChallengeError('Could not cancel the challenge. Try again.');
             }
           }} className="secondary-btn" style={{
             padding: '12px', width: '100%', color: 'var(--error-color)',

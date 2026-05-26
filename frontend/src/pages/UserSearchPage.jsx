@@ -4,8 +4,10 @@ import api from '../api/auth';
 import { LuSearch, LuUserPlus, LuCheck } from 'react-icons/lu';
 import FieldError from '../components/FieldError';
 import { validateSearchQuery } from '../utils/validation';
+import { useToast } from '../context/ToastContext';
 
 const UserSearchPage = () => {
+  const { showToast } = useToast();
   const [query, setQuery] = useState('');
   const [queryError, setQueryError] = useState('');
   const [results, setResults] = useState([]);
@@ -39,7 +41,7 @@ const UserSearchPage = () => {
       await api.post(`/friends/request?targetID=${userId}`);
       setSentRequests(prev => ({ ...prev, [userId]: true }));
     } catch {
-      alert('Action failed. Check pending requests.');
+      showToast('Could not send friend request. It may already be pending.');
     }
   };
 
