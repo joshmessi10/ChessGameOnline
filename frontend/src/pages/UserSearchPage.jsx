@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/auth';
-import { LuSearch, LuUserPlus, LuUser, LuCheck } from 'react-icons/lu';
+import { LuSearch, LuUserPlus, LuCheck } from 'react-icons/lu';
+import FieldError from '../components/FieldError';
+import { validateSearchQuery } from '../utils/validation';
 
 const UserSearchPage = () => {
   const [query, setQuery] = useState('');
+  const [queryError, setQueryError] = useState('');
   const [results, setResults] = useState([]);
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -12,10 +15,16 @@ const UserSearchPage = () => {
 
   const handleSearch = async (e) => {
     e.preventDefault();
-    if (!query.trim()) return;
+    const err = validateSearchQuery(query);
+    setQueryError(err || '');
+    if (err) {
+      setSearched(false);
+      return;
+    }
+    const trimmed = query.trim();
     setLoading(true);
     try {
-      const { data } = await api.get(`/users/search?q=${encodeURIComponent(query)}`);
+      const { data } = await api.get(`/users/search?q=${encodeURIComponent(trimmed)}`);
       setResults(data.results || []);
       setSearched(true);
     } catch {
@@ -42,35 +51,45 @@ const UserSearchPage = () => {
       </div>
 
       {/* Search Input Box */}
-      <form onSubmit={handleSearch} style={{ 
-        display: 'flex', 
-        border: '1px solid var(--border-color)', 
-        backgroundColor: 'var(--surface-color)',
-        marginBottom: '3rem',
-        overflow: 'hidden'
-      }}>
-        <div style={{ paddingLeft: '1.2rem', display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}>
-          <LuSearch size={20} />
+      <form onSubmit={handleSearch} noValidate style={{ marginBottom: '3rem' }}>
+        <div style={{
+          display: 'flex',
+          border: `1px solid ${queryError ? 'var(--error-color)' : 'var(--border-color)'}`,
+          backgroundColor: 'var(--surface-color)',
+          overflow: 'hidden',
+        }}>
+          <div style={{ paddingLeft: '1.2rem', display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}>
+            <LuSearch size={20} />
+          </div>
+          <input
+            type="text"
+            value={query}
+            onChange={e => {
+              setQuery(e.target.value);
+              if (queryError) setQueryError('');
+            }}
+            onBlur={() => {
+              if (query.trim()) setQueryError(validateSearchQuery(query) || '');
+            }}
+            maxLength={50}
+            placeholder="Enter username (2–50 characters)..."
+            aria-invalid={!!queryError}
+            style={{
+              flex: 1, padding: '1.2rem',
+              backgroundColor: 'transparent', border: 'none',
+              fontSize: '15px',
+            }}
+          />
+          <button
+            type="submit"
+            className="primary-btn"
+            disabled={loading}
+            style={{ width: '120px', borderRadius: 0, fontWeight: 700 }}
+          >
+            {loading ? '...' : 'Search'}
+          </button>
         </div>
-        <input
-          type="text"
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder="Enter username or official ID..."
-          style={{
-            flex: 1, padding: '1.2rem',
-            backgroundColor: 'transparent', border: 'none',
-            fontSize: '15px'
-          }}
-        />
-        <button
-          type="submit"
-          className="primary-btn"
-          disabled={loading}
-          style={{ width: '120px', borderRadius: 0, fontWeight: 700 }}
-        >
-          {loading ? '...' : 'Search'}
-        </button>
+        <FieldError message={queryError} />
       </form>
 
       {/* Results Section */}

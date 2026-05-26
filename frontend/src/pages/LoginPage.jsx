@@ -1,30 +1,59 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LuLogIn, LuChevronRight } from 'react-icons/lu';
+import { LuChevronRight } from 'react-icons/lu';
 import chessHero from '../components/chess.svg';
+import FieldError from '../components/FieldError';
+import {
+  validateLoginForm,
+  validateLoginIdentifier,
+  validatePassword,
+} from '../utils/validation';
 
 const LoginPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  const validateField = (field, value) => {
+    const message =
+      field === 'username'
+        ? validateLoginIdentifier(value)
+        : validatePassword(value);
+    setFieldErrors(prev => {
+      const next = { ...prev };
+      if (message) next[field] = message;
+      else delete next[field];
+      return next;
+    });
+    return message;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+
+    const errors = validateLoginForm({ username, password });
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setLoading(true);
     try {
-      await login({ username, password });
+      await login({ username: username.trim(), password });
       navigate('/dashboard');
-    } catch (err) {
+    } catch {
       setError('Check your credentials and try again.');
     } finally {
       setLoading(false);
     }
   };
+
+  const inputErrorStyle = (field) =>
+    fieldErrors[field] ? { borderColor: 'var(--error-color)' } : {};
 
   return (
     <div className="fade-in" style={{
@@ -35,10 +64,9 @@ const LoginPage = () => {
       padding: '2rem',
       background: 'radial-gradient(circle at 50% 30%, #1c1c1c 0%, #0c0b0a 70%)',
       position: 'relative',
-      overflow: 'hidden'
+      overflow: 'hidden',
     }}>
-      {/* Background Graphic */}
-      <div style={{ 
+      <div style={{
         position: 'absolute',
         bottom: '2%',
         left: '50%',
@@ -47,7 +75,7 @@ const LoginPage = () => {
         maxWidth: '700px',
         opacity: 0.1,
         pointerEvents: 'none',
-        zIndex: 1
+        zIndex: 1,
       }}>
         <img src={chessHero} alt="Chess Graphic" style={{ width: '100%', height: 'auto' }} />
       </div>
@@ -59,9 +87,8 @@ const LoginPage = () => {
         backgroundColor: 'rgba(12, 11, 10, 0.8)',
         padding: '3rem',
         border: '1px solid var(--border-color)',
-        backdropFilter: 'blur(10px)'
+        backdropFilter: 'blur(10px)',
       }}>
-        {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
           <h1 style={{ fontSize: '3rem', marginBottom: '0.5rem', fontFamily: 'Playfair Display, serif' }}>Login</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
@@ -77,32 +104,58 @@ const LoginPage = () => {
             color: 'var(--error-color)',
             fontSize: '13px',
             marginBottom: '1.5rem',
-            textAlign: 'center'
+            textAlign: 'center',
           }}>{error}</div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-            <label style={{ textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '11px', fontWeight: 600 }}>Identifier</label>
+            <label
+              htmlFor="login-identifier"
+              style={{ textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '11px', fontWeight: 600 }}
+            >
+              Identifier
+            </label>
             <input
+              id="login-identifier"
               type="text"
               placeholder="Username or Email"
               value={username}
-              onChange={e => setUsername(e.target.value)}
-              required
-              style={{ borderRadius: 0 }}
+              onChange={e => {
+                setUsername(e.target.value);
+                if (fieldErrors.username) validateField('username', e.target.value);
+              }}
+              onBlur={e => validateField('username', e.target.value)}
+              autoComplete="username"
+              maxLength={254}
+              style={{ borderRadius: 0, ...inputErrorStyle('username') }}
+              aria-invalid={!!fieldErrors.username}
             />
+            <FieldError message={fieldErrors.username} />
           </div>
           <div className="form-group" style={{ marginBottom: '2rem' }}>
-            <label style={{ textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '11px', fontWeight: 600 }}>Security Key</label>
+            <label
+              htmlFor="login-password"
+              style={{ textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '11px', fontWeight: 600 }}
+            >
+              Security Key
+            </label>
             <input
+              id="login-password"
               type="password"
               placeholder="••••••••"
               value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-              style={{ borderRadius: 0 }}
+              onChange={e => {
+                setPassword(e.target.value);
+                if (fieldErrors.password) validateField('password', e.target.value);
+              }}
+              onBlur={e => validateField('password', e.target.value)}
+              autoComplete="current-password"
+              maxLength={128}
+              style={{ borderRadius: 0, ...inputErrorStyle('password') }}
+              aria-invalid={!!fieldErrors.password}
             />
+            <FieldError message={fieldErrors.password} />
           </div>
 
           <button
@@ -122,7 +175,7 @@ const LoginPage = () => {
         <p style={{ textAlign: 'center', marginTop: '2.5rem', fontSize: '13px', color: 'var(--text-secondary)' }}>
           Don't have an account?{' '}
           <Link to="/register" style={{ color: 'var(--text-primary)', fontWeight: 700, textDecoration: 'underline' }}>
-             Join ChessCamp
+            Join ChessCamp
           </Link>
         </p>
       </div>

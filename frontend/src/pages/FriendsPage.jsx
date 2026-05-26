@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/auth';
 import { LuUsers, LuUserPlus, LuMail, LuUserX, LuCheck, LuArrowRight } from 'react-icons/lu';
+import FieldError from '../components/FieldError';
+import { validateSearchQuery } from '../utils/validation';
 
 const TabButton = ({ active, onClick, icon: Icon, children, count }) => (
   <button onClick={onClick} style={{
@@ -33,6 +35,7 @@ const FriendsPage = () => {
   const [requests, setRequests] = useState([]);
   const [gameInvites, setGameInvites] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchQueryError, setSearchQueryError] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sentRequests, setSentRequests] = useState({});
@@ -59,9 +62,15 @@ const FriendsPage = () => {
 
   const handleSearch = async (e) => {
     e.preventDefault();
-    if (!searchQuery.trim()) return;
+    const err = validateSearchQuery(searchQuery);
+    setSearchQueryError(err || '');
+    if (err) {
+      setSearchResults([]);
+      return;
+    }
+    const trimmed = searchQuery.trim();
     try {
-      const { data } = await api.get(`/users/search?q=${encodeURIComponent(searchQuery)}`);
+      const { data } = await api.get(`/users/search?q=${encodeURIComponent(trimmed)}`);
       setSearchResults(data.results || []);
     } catch { setSearchResults([]); }
   };
@@ -213,9 +222,27 @@ const FriendsPage = () => {
 
       {tab === 'search' && (
         <div>
-          <form onSubmit={handleSearch} style={{ display: 'flex', border: '1px solid var(--border-color)', backgroundColor: 'var(--surface-color)', marginBottom: '2rem' }}>
-            <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Username search..." style={{ flex: 1, padding: '1rem', background: 'transparent', border: 'none' }} />
-            <button type="submit" className="primary-btn" style={{ width: '100px', borderRadius: 0 }}>Scan</button>
+          <form onSubmit={handleSearch} noValidate style={{ marginBottom: '2rem' }}>
+            <div style={{
+              display: 'flex',
+              border: `1px solid ${searchQueryError ? 'var(--error-color)' : 'var(--border-color)'}`,
+              backgroundColor: 'var(--surface-color)',
+            }}>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => {
+                  setSearchQuery(e.target.value);
+                  if (searchQueryError) setSearchQueryError('');
+                }}
+                maxLength={50}
+                placeholder="Username search (2–50 characters)..."
+                aria-invalid={!!searchQueryError}
+                style={{ flex: 1, padding: '1rem', background: 'transparent', border: 'none' }}
+              />
+              <button type="submit" className="primary-btn" style={{ width: '100px', borderRadius: 0 }}>Scan</button>
+            </div>
+            <FieldError message={searchQueryError} />
           </form>
           <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border-color)' }}>
             {searchResults.map(u => (
