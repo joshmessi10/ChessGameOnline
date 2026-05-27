@@ -68,6 +68,23 @@ const FriendsPage = () => {
 
   useEffect(() => { fetchFriends(); }, [tab]);
 
+  useEffect(() => {
+    if (sentGameInvites.length === 0) return;
+    const interval = setInterval(async () => {
+      try {
+        const { data } = await api.get('/match/active');
+        if (Array.isArray(data)) {
+          const activeIds = data.map(m => m.id);
+          const accepted = sentGameInvites.find(inv => activeIds.includes(inv.id));
+          if (accepted) {
+            navigate('/play/' + accepted.id);
+          }
+        }
+      } catch {}
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [sentGameInvites, navigate]);
+
   const handleSearch = async (e) => {
     e.preventDefault();
     const err = validateSearchQuery(searchQuery);
