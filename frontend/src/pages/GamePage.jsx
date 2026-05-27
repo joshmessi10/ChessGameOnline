@@ -366,6 +366,11 @@ const GamePage = () => {
     } catch (err) {
       // Revert FEN silently on error (no browser alert popups!)
       setGame(new Chess(originalFen));
+      const detail = err?.response?.data?.detail;
+      if (typeof detail === 'string' && detail.toLowerCase().includes('lost on time')) {
+        showToast('Time expired. This game was finished by timeout.');
+        loadGameData();
+      }
       return false;
     }
   };

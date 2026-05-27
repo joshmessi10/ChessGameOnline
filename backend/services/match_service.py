@@ -28,10 +28,26 @@ class MatchService:
             raise HTTPException(status_code=404, detail="Match not found")
         if user_id not in (match.jugador_blancas_id, match.jugador_negras_id):
             raise HTTPException(status_code=403, detail="You are not a participant in this match")
+        self._ensure_match_clocks_initialized(match)
         self.check_and_apply_timeout(match.id)
         # Fetch updated record
         match = self.match_repo.find_by_id(match_id)
         return self._map_to_response(match)
+
+    def _ensure_match_clocks_initialized(self, match: Match) -> None:
+        if match.estado != MatchStatus.IN_PROGRESS:
+            return
+        if match.tiempo_restante_blancas is not None and match.tiempo_restante_negras is not None and match.ultima_jugada_en is not None:
+            return
+
+        initial_seconds, _ = self._parse_control_tiempo(match.control_tiempo)
+        if match.tiempo_restante_blancas is None:
+            match.tiempo_restante_blancas = float(initial_seconds)
+        if match.tiempo_restante_negras is None:
+            match.tiempo_restante_negras = float(initial_seconds)
+        if match.ultima_jugada_en is None:
+            match.ultima_jugada_en = datetime.now(timezone.utc)
+        self.match_repo.update(match)
 
     def _finalize_match_ratings_and_stats(self, match: Match, result: MatchResult) -> tuple:
         from ..models.statistics import Statistics
@@ -513,9 +529,14 @@ class MatchService:
     def _parse_control_tiempo(self, control: str) -> tuple[int, int]:
         try:
             parts = control.split("+")
-            minutes = int(parts[0])
+            base = int(parts[0])
             increment = int(parts[1]) if len(parts) > 1 else 0
-            return minutes * 60, increment
+            # Legacy compatibility:
+            # Some old clients stored seconds in the base part (e.g. "300+0" for 5+0).
+            # If base is unusually large for minutes, treat it as seconds.
+            if base >= 180:
+                return base, increment
+            return base * 60, increment
         except Exception:
             return 600, 0
 

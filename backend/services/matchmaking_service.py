@@ -119,15 +119,23 @@ class MatchmakingService:
                     from ..models.match import Match
                     from ..models.enums import MatchStatus, MatchResult
                     from ..repositories.match_repository import MatchRepository
+                    from datetime import datetime, timezone
 
                     match_repo = MatchRepository(self.session)
+                    # Keep parser behavior aligned with MatchService for legacy controls like "300+0"
+                    base_part = control_tiempo.split("+")[0] if "+" in control_tiempo else control_tiempo
+                    base = int(base_part)
+                    initial_seconds = base if base >= 180 else base * 60
                     new_match = Match(
                         jugador_blancas_id=white_id,
                         jugador_negras_id=black_id,
                         modo=mode,
                         control_tiempo=control_tiempo,
                         estado=MatchStatus.IN_PROGRESS,
-                        resultado=MatchResult.ONGOING
+                        resultado=MatchResult.ONGOING,
+                        tiempo_restante_blancas=float(initial_seconds),
+                        tiempo_restante_negras=float(initial_seconds),
+                        ultima_jugada_en=datetime.now(timezone.utc),
                     )
                     saved = match_repo.save(new_match)
 
