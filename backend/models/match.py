@@ -23,6 +23,8 @@ class Match(SQLModel, table=True):
     tiempo_restante_blancas: Optional[float] = Field(default=None)
     tiempo_restante_negras: Optional[float] = Field(default=None)
     ultima_jugada_en: Optional[datetime] = Field(default=None)
+    elo_change_blancas: Optional[int] = Field(default=None)
+    elo_change_negras: Optional[int] = Field(default=None)
 
     # Relationships
     jugador_blancas: "Usuario" = Relationship(

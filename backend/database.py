@@ -26,6 +26,10 @@ def create_db_and_tables():
             if "ultima_jugada_en" not in columns:
                 col_type = "TIMESTAMP" if engine.dialect.name != "sqlite" else "DATETIME"
                 session.execute(text(f"ALTER TABLE partidas ADD COLUMN ultima_jugada_en {col_type}"))
+            if "elo_change_blancas" not in columns:
+                session.execute(text("ALTER TABLE partidas ADD COLUMN elo_change_blancas INTEGER"))
+            if "elo_change_negras" not in columns:
+                session.execute(text("ALTER TABLE partidas ADD COLUMN elo_change_negras INTEGER"))
             session.commit()
         except Exception as e:
             print(f"[Migration Warning] Could not apply automatic columns migration: {e}")

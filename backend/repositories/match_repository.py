@@ -1,5 +1,5 @@
 from typing import Optional, List
-from sqlmodel import Session, select, or_
+from sqlmodel import Session, select, or_, desc
 from ..models.match import Match
 
 class MatchRepository:
@@ -12,7 +12,7 @@ class MatchRepository:
     def find_by_player_id(self, player_id: int) -> List[Match]:
         statement = select(Match).where(
             or_(Match.jugador_blancas_id == player_id, Match.jugador_negras_id == player_id)
-        )
+        ).order_by(desc(Match.creada_en))
         return self.session.exec(statement).all()
 
     def save(self, match: Match) -> Match:

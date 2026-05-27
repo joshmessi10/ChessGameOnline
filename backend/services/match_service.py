@@ -103,8 +103,13 @@ class MatchService:
         
         self.stats_repo.update(stats_w)
         self.stats_repo.update(stats_b)
-        
-        return int(new_rw), int(new_rb), int(new_rw) - rw, int(new_rb) - rb
+
+        change_w = int(new_rw) - rw
+        change_b = int(new_rb) - rb
+        match.elo_change_blancas = change_w
+        match.elo_change_negras = change_b
+
+        return int(new_rw), int(new_rb), change_w, change_b
 
 
     def end_match(self, match_id: int, user_id: int, request: EndMatchRequest) -> dict:

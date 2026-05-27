@@ -29,6 +29,7 @@ class MatchHistoryItemDTO(BaseModel):
     date: datetime
     playerColor: str
     modo: MatchType
+    eloDelta: Optional[int] = None
 
 
 class UserResponse(BaseModel):

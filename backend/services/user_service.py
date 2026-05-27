@@ -66,13 +66,15 @@ class UserService:
             is_white = m.jugador_blancas_id == user_id
             opponent_id = m.jugador_negras_id if is_white else m.jugador_blancas_id
             opponent = self.user_repo.find_by_id(opponent_id)
+            elo_delta = m.elo_change_blancas if is_white else m.elo_change_negras
             history.append(MatchHistoryItemDTO(
                 matchID=m.id,
                 opponentUsername=opponent.nombre_usuario if opponent else "Unknown",
                 result=m.resultado,
                 date=m.creada_en,
                 playerColor="white" if is_white else "black",
-                modo=m.modo
+                modo=m.modo,
+                eloDelta=elo_delta
             ))
 
             
