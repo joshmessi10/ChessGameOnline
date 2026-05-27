@@ -37,5 +37,5 @@ class AuthService:
                 headers={"WWW-Authenticate": "Bearer"},
             )
             
-        access_token = create_access_token(data={"sub": user.nombre_usuario})
+        access_token = create_access_token(data={"sub": str(user.id)})
         return LoginResponse(access_token=access_token)
