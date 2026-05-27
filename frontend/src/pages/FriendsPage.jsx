@@ -62,7 +62,7 @@ const FriendsPage = () => {
     setLoading(false);
   };
 
-  useEffect(() => { fetchFriends(); }, []);
+  useEffect(() => { fetchFriends(); }, [tab]);
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -82,18 +82,20 @@ const FriendsPage = () => {
   const sendRequest = async (userId) => {
     try {
       await api.post(`/friends/request?targetID=${userId}`);
-      setSentRequests(p => ({ ...p, [userId]: true }));
+      setSentRequests(p => ({ ...p, [userId]: true })); fetchFriends();
     } catch {
       showToast('Could not send friend request. It may already be pending.');
     }
   };
 
   const acceptRequest = async (id) => {
+    setRequests(p => p.filter(r => r.usuario_id !== id));
     try { await api.put(`/friends/${id}/accept`); fetchFriends(); }
     catch { showToast('Could not accept the friend request.'); }
   };
 
   const rejectRequest = async (id) => {
+    setRequests(p => p.filter(r => r.usuario_id !== id));
     try { await api.delete(`/friends/${id}/reject`); fetchFriends(); }
     catch { showToast('Could not decline the friend request.'); }
   };
