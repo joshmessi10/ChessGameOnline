@@ -595,7 +595,7 @@ const GamePage = () => {
   };
 
   const PlayerInfo = ({ player, color, isBottom }) => {
-    const isWhite = color === 'white';
+    const calculateCapturedPieces = (playerColor) => { const initial = { p: 8, n: 2, b: 2, r: 2, q: 1 }; const current = { p: 0, n: 0, b: 0, r: 0, q: 0 }; const board = game.board(); for (let row of board) { for (let square of row) { if (square && square.color === (playerColor === 'white' ? 'b' : 'w')) { current[square.type]++; } } } const captured = []; for (const type of ['q', 'r', 'b', 'n', 'p']) { const diff = initial[type] - current[type]; for (let i = 0; i < diff; i++) captured.push(type); } return captured; }; const isWhite = color === 'white';
     const timeLeft = isWhite ? timeLeftWhite : timeLeftBlack;
     const isPlayerTurn = game.turn() === (isWhite ? 'w' : 'b') && match.estado === 'in_progress';
     
@@ -619,7 +619,7 @@ const GamePage = () => {
               {player?.nombre_usuario || 'Waiting...'}
               {player?.id === user?.id && <span style={{ color: 'var(--text-secondary)', fontWeight: 500, fontSize: '11px' }}> (You)</span>}
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600 }}>RANK {player?.userELO || 1200}</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600 }}>RANK {player?.userELO || 1200}</div>{calculateCapturedPieces(color).length > 0 && <div style={{ fontSize: '16px', display: 'flex', gap: '1px', marginTop: '2px', lineHeight: 1 }}>{calculateCapturedPieces(color).map((type, i) => <span key={i} style={{ color: color === 'white' ? '#09090b' : '#f4f4f5', textShadow: color === 'white' ? '-1px -1px 0 rgba(255,255,255,0.4), 1px -1px 0 rgba(255,255,255,0.4), -1px 1px 0 rgba(255,255,255,0.4), 1px 1px 0 rgba(255,255,255,0.4)' : 'none' }}>{({ w: { p: '♙', n: '♘', b: '♗', r: '♖', q: '♕' }, b: { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛' } })[color === 'white' ? 'b' : 'w'][type]}</span>)}</div>}
           </div>
         </div>
         <div style={{
