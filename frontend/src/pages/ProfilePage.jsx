@@ -23,21 +23,10 @@ const ProfilePage = () => {
 
   useEffect(() => { fetchProfile(); }, [resolvedId]);
 
-  if (loading) return (
-    <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
-      Synchronizing profile data...
-    </div>
-  );
   
-  if (!profile) return (
-    <div style={{ padding: '4rem', textAlign: 'center' }}>
-      <h2 style={{ fontSize: '2rem', marginBottom: '1rem' }}>Profile Not Found</h2>
-      <Link to="/" className="secondary-btn">Return Home</Link>
-    </div>
-  );
 
-  const stats = profile.stats || { victorias: 0, partidas_jugadas: 0, empates: 0 };
-  const matches = profile.matchHistory || [];
+  const stats = profile?.stats || { victorias: 0, partidas_jugadas: 0, empates: 0 };
+  const matches = profile?.matchHistory || [];
 
   const filteredMatches = useMemo(() => {
     return matches.filter((m) => {
@@ -64,6 +53,17 @@ const ProfilePage = () => {
     );
   }, [filteredMatches]);
 
+  if (loading) return (
+    <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
+      Synchronizing profile data...
+    </div>
+  );
+  if (!profile) return (
+    <div style={{ padding: '4rem', textAlign: 'center' }}>
+      <h2 style={{ fontSize: '2rem', marginBottom: '1rem' }}>Profile Not Found</h2>
+      <Link to="/" className="secondary-btn">Return Home</Link>
+    </div>
+  );
   return (
     <div className="fade-in" style={{ maxWidth: '1000px', margin: '0 auto', padding: '4rem 2rem' }}>
       
