@@ -115,7 +115,13 @@ const GamePage = () => {
       setLoading(false);
     } catch (err) {
       console.error(err);
-      showToast('Could not load match details.');
+      if (err.response && err.response.status === 403) {
+        showToast('You are not a participant in this match.', { type: 'error' });
+      } else if (err.response && err.response.status === 404) {
+        showToast('Match not found.', { type: 'error' });
+      } else {
+        showToast('Could not load match details.');
+      }
       navigate('/dashboard');
     }
   };

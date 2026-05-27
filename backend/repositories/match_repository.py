@@ -1,5 +1,5 @@
 from typing import Optional, List
-from sqlmodel import Session, select, or_, desc
+from sqlmodel import Session, select, or_, and_, desc
 from ..models.match import Match
 
 class MatchRepository:
@@ -42,4 +42,23 @@ class MatchRepository:
             Match.estado == MatchStatus.WAITING
         )
         return self.session.exec(statement).all()
+
+    def find_pending_invites_by_host_id(self, host_id: int) -> List[Match]:
+        from ..models.enums import MatchStatus
+        statement = select(Match).where(
+            Match.jugador_blancas_id == host_id,
+            Match.estado == MatchStatus.WAITING
+        )
+        return self.session.exec(statement).all()
+
+    def find_pending_between_players(self, user_a: int, user_b: int) -> Optional[Match]:
+        from ..models.enums import MatchStatus
+        statement = select(Match).where(
+            Match.estado == MatchStatus.WAITING,
+            or_(
+                and_(Match.jugador_blancas_id == user_a, Match.jugador_negras_id == user_b),
+                and_(Match.jugador_blancas_id == user_b, Match.jugador_negras_id == user_a),
+            )
+        ).order_by(desc(Match.creada_en))
+        return self.session.exec(statement).first()
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/auth';
-import { LuUsers, LuUserPlus, LuMail, LuUserX, LuCheck, LuArrowRight } from 'react-icons/lu';
+import { LuUsers, LuUserPlus, LuMail } from 'react-icons/lu';
 import FieldError from '../components/FieldError';
 import { validateSearchQuery } from '../utils/validation';
 import { useToast } from '../context/ToastContext';
@@ -38,6 +38,7 @@ const FriendsPage = () => {
   const [friends, setFriends] = useState([]);
   const [requests, setRequests] = useState([]);
   const [gameInvites, setGameInvites] = useState([]);
+  const [sentGameInvites, setSentGameInvites] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchQueryError, setSearchQueryError] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -48,6 +49,7 @@ const FriendsPage = () => {
   const [challengeFriend, setChallengeFriend] = useState(null); // { id, name }
   const [matchType, setMatchType] = useState('blitz');
   const [timeControl, setTimeControl] = useState('3+2');
+  const [sendingChallenge, setSendingChallenge] = useState(false);
 
   const fetchFriends = async () => {
     try {
@@ -58,6 +60,8 @@ const FriendsPage = () => {
 
       const resInv = await api.get('/match/invite/pending');
       setGameInvites(resInv.data || []);
+      const resSent = await api.get('/match/invite/sent');
+      setSentGameInvites(resSent.data || []);
     } catch { }
     setLoading(false);
   };
@@ -114,17 +118,23 @@ const FriendsPage = () => {
   };
 
   const handleSendChallenge = async () => {
-    if (!challengeFriend) return;
+    if (!challengeFriend || sendingChallenge) return;
+    setSendingChallenge(true);
     try {
-      const { data } = await api.post('/match/invite', {
+      await api.post('/match/invite', {
         friend_id: challengeFriend.id,
         modo: matchType,
         control_tiempo: timeControl
       });
       setChallengeFriend(null);
-      navigate(`/play/${data.id}`);
-    } catch {
-      showToast('Could not send the challenge invitation.');
+      fetchFriends();
+      showToast('Challenge sent. The match will start when your friend accepts.', { type: 'success' });
+    } catch (err) {
+      const detail = err?.response?.data?.detail;
+      if (typeof detail === 'string') showToast(detail);
+      else showToast('Could not send the challenge invitation.');
+    } finally {
+      setSendingChallenge(false);
     }
   };
 
@@ -143,6 +153,17 @@ const FriendsPage = () => {
       fetchFriends();
     } catch {
       showToast('Could not decline the game challenge.');
+    }
+  };
+
+  const cancelSentInvite = async (inviteID) => {
+    try {
+      await api.delete(`/match/invite/${inviteID}/decline`);
+      setSentGameInvites(prev => prev.filter(inv => inv.id !== inviteID));
+      showToast('Challenge invitation cancelled.', { type: 'success' });
+      fetchFriends();
+    } catch {
+      showToast('Could not cancel the challenge invitation.');
     }
   };
 
@@ -211,7 +232,7 @@ const FriendsPage = () => {
           </div>
 
           <div>
-            <h3 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '1rem', letterSpacing: '0.05em' }}>Game Challenges ({gameInvites.length})</h3>
+            <h3 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '1rem', letterSpacing: '0.05em' }}>Incoming Challenges ({gameInvites.length})</h3>
             <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border-color)' }}>
               {gameInvites.length === 0 ? (
                 <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>No active game challenges.</div>
@@ -227,6 +248,28 @@ const FriendsPage = () => {
                   <div style={{ display: 'flex', gap: '0.75rem' }}>
                     <button onClick={() => acceptGameInvite(inv.id)} className="primary-btn" style={{ padding: '6px 16px', fontSize: '11px', backgroundColor: 'var(--success-color)', border: 'none', color: '#000' }}>Accept</button>
                     <button onClick={() => declineGameInvite(inv.id)} className="secondary-btn" style={{ padding: '6px 16px', fontSize: '11px' }}>Decline</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '1rem', letterSpacing: '0.05em' }}>Sent Challenges ({sentGameInvites.length})</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border-color)' }}>
+              {sentGameInvites.length === 0 ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>No pending sent challenges.</div>
+              ) : sentGameInvites.map(inv => (
+                <div key={inv.id} style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#09090b' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ width: '40px', height: '40px', backgroundColor: '#27272a', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 900, letterSpacing: '0.05em' }}>OUT</div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '15px' }}>{inv.invited_username} <span style={{ color: '#f59e0b', fontSize: '12px' }}>({inv.invited_elo} ELO)</span></div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Waiting acceptance for {inv.modo.toUpperCase()} ({inv.control_tiempo})</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button onClick={() => cancelSentInvite(inv.id)} className="secondary-btn" style={{ padding: '6px 16px', fontSize: '11px', color: 'var(--error-color)' }}>Cancel</button>
                   </div>
                 </div>
               ))}
@@ -345,7 +388,9 @@ const FriendsPage = () => {
             </div>
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-              <button onClick={handleSendChallenge} className="primary-btn" style={{ flex: 1, padding: '12px' }}>Send Challenge</button>
+              <button onClick={handleSendChallenge} disabled={sendingChallenge} className="primary-btn" style={{ flex: 1, padding: '12px' }}>
+                {sendingChallenge ? 'Sending...' : 'Send Challenge'}
+              </button>
               <button onClick={() => setChallengeFriend(null)} className="secondary-btn" style={{ flex: 1, padding: '12px' }}>Cancel</button>
             </div>
           </div>

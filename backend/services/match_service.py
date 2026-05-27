@@ -7,7 +7,7 @@ from ..repositories.match_repository import MatchRepository
 from ..repositories.rating_repository import RatingRepository
 from ..repositories.statistics_repository import StatisticsRepository
 from ..models.match import Match
-from ..models.enums import MatchStatus, MatchResult, EndReason
+from ..models.enums import MatchStatus, MatchResult
 from ..schemas.match import MatchResponse, MoveRequest, MoveResponse, EndMatchRequest, EndMatchResponse
 from ..schemas.invite import InviteRequest, InviteResponse
 import chess
@@ -168,7 +168,13 @@ class MatchService:
 
 
     def send_invite(self, host_id: int, request: InviteRequest) -> InviteResponse:
-        # Mocking invite creation (could be a table, but for now we create a WAITING match)
+        if host_id == request.friend_id:
+            raise HTTPException(status_code=400, detail="You cannot challenge yourself")
+
+        existing = self.match_repo.find_pending_between_players(host_id, request.friend_id)
+        if existing:
+            raise HTTPException(status_code=409, detail="There is already a pending challenge between these players")
+
         new_match = Match(
             jugador_blancas_id=host_id,
             jugador_negras_id=request.friend_id,
@@ -191,8 +197,8 @@ class MatchService:
             raise HTTPException(status_code=404, detail="Invitation match not found")
         if match.estado != MatchStatus.WAITING:
             raise HTTPException(status_code=400, detail="Match is already in progress, finished, or cancelled")
-        if user_id not in (match.jugador_blancas_id, match.jugador_negras_id):
-            raise HTTPException(status_code=403, detail="You are not a participant in this invitation")
+        if user_id != match.jugador_negras_id:
+            raise HTTPException(status_code=403, detail="Only the invited player can accept this challenge")
 
         match.estado = MatchStatus.IN_PROGRESS
         
@@ -235,13 +241,16 @@ class MatchService:
         if user_id not in (match.jugador_blancas_id, match.jugador_negras_id):
             raise HTTPException(status_code=403, detail="You are not a participant in this invitation")
 
+        is_host = user_id == match.jugador_blancas_id
+        action = "cancelled" if is_host else "declined"
+
         match.estado = MatchStatus.CANCELLED
         updated = self.match_repo.update(match)
 
         broadcast_payload = {
             "type": "match_cancelled",
             "match_id": updated.id,
-            "message": "Challenge declined"
+            "message": f"Challenge {action}"
         }
 
         return {
@@ -250,7 +259,7 @@ class MatchService:
                 inviter_id=updated.jugador_blancas_id,
                 invited_id=updated.jugador_negras_id,
                 status="cancelled",
-                message="Invitation declined"
+                message="Invitation cancelled" if is_host else "Invitation declined"
             ),
             "broadcast_payload": broadcast_payload
         }
@@ -451,6 +460,23 @@ class MatchService:
                 "inviter_id": inv.jugador_blancas_id,
                 "inviter_username": host.nombre_usuario if host else "Unknown",
                 "inviter_elo": host_rating.rating if host_rating else 1200,
+                "modo": inv.modo,
+                "control_tiempo": inv.control_tiempo,
+                "estado": inv.estado
+            })
+        return results
+
+    def get_sent_invites(self, user_id: int) -> List[dict]:
+        invites = self.match_repo.find_pending_invites_by_host_id(user_id)
+        results = []
+        for inv in invites:
+            guest = self.user_repo.find_by_id(inv.jugador_negras_id)
+            guest_rating = self.rating_repo.find_by_usuario_and_modo(inv.jugador_negras_id, inv.modo)
+            results.append({
+                "id": inv.id,
+                "invited_id": inv.jugador_negras_id,
+                "invited_username": guest.nombre_usuario if guest else "Unknown",
+                "invited_elo": guest_rating.rating if guest_rating else 1200,
                 "modo": inv.modo,
                 "control_tiempo": inv.control_tiempo,
                 "estado": inv.estado

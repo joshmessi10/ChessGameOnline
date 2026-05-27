@@ -69,6 +69,23 @@ def run_tests():
     assert resp_invite.json()["status"] == "pending"
     print(f"[PASS] Challenge invitation sent successfully. Invite ID: {invite_id}")
 
+    print("\n--- Test Case 1.5: Match must remain WAITING until guest accepts ---")
+    with Session(engine) as s:
+        db_match = s.query(Match).filter(Match.id == invite_id).first()
+        assert db_match is not None
+        assert db_match.estado == MatchStatus.WAITING
+        assert db_match.resultado == MatchResult.ONGOING
+    print("[PASS] Invitation only creates WAITING match, not active game.")
+
+    print("\n--- Test Case 1.6: Duplicate invitation between same players must be blocked ---")
+    resp_dup = client.post(
+        "/api/match/invite",
+        json={"friend_id": user2.id, "modo": "bullet", "control_tiempo": "1+0"},
+        headers=headers1
+    )
+    assert resp_dup.status_code == 409
+    print("[PASS] Duplicate pending challenge blocked with HTTP 409.")
+
     print("\n--- Test Case 2: Decline game invitation ---")
     resp_decline = client.delete(
         f"/api/match/invite/{invite_id}/decline",

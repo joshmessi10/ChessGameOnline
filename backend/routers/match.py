@@ -14,6 +14,11 @@ async def get_pending_invites(session: SessionDep, current_user: CurrentUserDep)
     service = MatchService(session)
     return service.get_pending_invites(current_user.id)
 
+@router.get("/invite/sent")
+async def get_sent_invites(session: SessionDep, current_user: CurrentUserDep):
+    service = MatchService(session)
+    return service.get_sent_invites(current_user.id)
+
 @router.get("/active")
 async def get_my_active_matches(session: SessionDep, current_user: CurrentUserDep):
     service = MatchService(session)
