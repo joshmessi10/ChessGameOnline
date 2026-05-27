@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import math
+import io
 from typing import Optional, List
 from fastapi import HTTPException
 from sqlmodel import Session
@@ -11,6 +12,7 @@ from ..models.enums import MatchStatus, MatchResult
 from ..schemas.match import MatchResponse, MoveRequest, MoveResponse, EndMatchRequest, EndMatchResponse
 from ..schemas.invite import InviteRequest, InviteResponse
 import chess
+import chess.pgn
 from ..core.chess_engine import ChessEngine
 
 class MatchService:
@@ -127,6 +129,94 @@ class MatchService:
 
         return int(new_rw), int(new_rb), change_w, change_b
 
+    def _build_board_from_stored_pgn(self, stored_pgn: Optional[str]) -> chess.Board:
+        board = chess.Board()
+        if not stored_pgn:
+            return board
+
+        text = stored_pgn.strip()
+        if not text:
+            return board
+
+        # True PGN (headers + movetext)
+        if "[" in text and "]" in text:
+            try:
+                game = chess.pgn.read_game(io.StringIO(text))
+                if game:
+                    board = game.board()
+                    for move in game.mainline_moves():
+                        board.push(move)
+                    return board
+            except Exception:
+                pass
+
+        # Legacy format fallback: SAN tokens separated by spaces
+        for mv in text.split():
+            try:
+                board.push_san(mv)
+            except ValueError:
+                try:
+                    board.push_uci(mv)
+                except ValueError:
+                    pass
+        return board
+
+    def _append_san_to_pgn(self, stored_pgn: Optional[str], san_move: str, match: Match) -> str:
+        board = self._build_board_from_stored_pgn(stored_pgn)
+        try:
+            move = board.parse_san(san_move)
+        except ValueError:
+            # If SAN cannot be parsed against reconstructed board, preserve legacy behavior.
+            return f"{stored_pgn or ''} {san_move}".strip()
+
+        board.push(move)
+
+        game = chess.pgn.Game()
+        game.headers["Event"] = "ChessCamp Match"
+        game.headers["Site"] = "ChessCamp"
+        game.headers["Date"] = (match.creada_en or datetime.now(timezone.utc)).strftime("%Y.%m.%d")
+        game.headers["White"] = str(match.jugador_blancas_id)
+        game.headers["Black"] = str(match.jugador_negras_id)
+
+        node = game
+        replay_board = chess.Board()
+        for m in board.move_stack:
+            node = node.add_variation(m)
+            replay_board.push(m)
+
+        exporter = chess.pgn.StringExporter(headers=True, variations=False, comments=False)
+        return game.accept(exporter).strip()
+
+    def _result_to_pgn_token(self, result: MatchResult) -> str:
+        if result == MatchResult.WHITE_WIN:
+            return "1-0"
+        if result == MatchResult.BLACK_WIN:
+            return "0-1"
+        if result == MatchResult.DRAW:
+            return "1/2-1/2"
+        return "*"
+
+    def _stamp_pgn_after_result(self, match: Match, end_reason: Optional[str] = None) -> None:
+        board = self._build_board_from_stored_pgn(match.movimientos_pgn)
+        game = chess.pgn.Game()
+        game.headers["Event"] = "ChessCamp Match"
+        game.headers["Site"] = "ChessCamp"
+        game.headers["Date"] = (match.creada_en or datetime.now(timezone.utc)).strftime("%Y.%m.%d")
+        game.headers["White"] = str(match.jugador_blancas_id)
+        game.headers["Black"] = str(match.jugador_negras_id)
+        game.headers["Result"] = self._result_to_pgn_token(match.resultado)
+        if end_reason:
+            game.headers["Termination"] = end_reason
+
+        node = game
+        replay_board = chess.Board()
+        for m in board.move_stack:
+            node = node.add_variation(m)
+            replay_board.push(m)
+
+        exporter = chess.pgn.StringExporter(headers=True, variations=False, comments=False)
+        match.movimientos_pgn = game.accept(exporter).strip()
+
 
     def end_match(self, match_id: int, user_id: int, request: EndMatchRequest) -> dict:
         match = self.match_repo.find_by_id(match_id)
@@ -155,6 +245,7 @@ class MatchService:
             
         match.estado = MatchStatus.FINISHED
         match.finalizada_en = datetime.now(timezone.utc)
+        self._stamp_pgn_after_result(match, request.reason)
         self.match_repo.update(match)
         
         broadcast_payload = {
@@ -293,15 +384,7 @@ class MatchService:
             elapsed = (now - last_move_time).total_seconds()
             
             # Reconstruct turn
-            board = chess.Board()
-            for mv in (match.movimientos_pgn or "").split():
-                try:
-                    board.push_san(mv)
-                except ValueError:
-                    try:
-                        board.push_uci(mv)
-                    except ValueError:
-                        pass
+            board = self._build_board_from_stored_pgn(match.movimientos_pgn)
             
             if board.turn == chess.WHITE:
                 if t_w is not None:
@@ -343,15 +426,7 @@ class MatchService:
             raise HTTPException(status_code=403, detail="You are not a participant in this match")
             
         # Reconstruct the board from PGN moves
-        board = chess.Board()
-        for mv in (match.movimientos_pgn or "").split():
-            try:
-                board.push_san(mv)
-            except ValueError:
-                try:
-                    board.push_uci(mv)
-                except ValueError:
-                    pass
+        board = self._build_board_from_stored_pgn(match.movimientos_pgn)
 
         # Calculate time elapsed and update active player clock
         now = datetime.now(timezone.utc)
@@ -402,7 +477,7 @@ class MatchService:
             raise HTTPException(status_code=400, detail=result["rejectionReason"])
             
         san_move = result["appliedMove"]
-        new_pgn = f"{match.movimientos_pgn or ''} {san_move}".strip()
+        new_pgn = self._append_san_to_pgn(match.movimientos_pgn, san_move, match)
         match.movimientos_pgn = new_pgn
         
         # Detect status
@@ -426,7 +501,9 @@ class MatchService:
             match.resultado = MatchResult.DRAW
             end_reason = "stalemate" if status.get("isStalemate") else "draw"
             new_elo_w, new_elo_b, change_w, change_b = self._finalize_match_ratings_and_stats(match, match.resultado)
-            
+        if match.estado == MatchStatus.FINISHED:
+            self._stamp_pgn_after_result(match, end_reason)
+
         self.match_repo.update(match)
         
         # Prepare broadcast payload
@@ -510,8 +587,8 @@ class MatchService:
                 opponent = self.user_repo.find_by_id(opponent_id)
                 
                 # Determine active turn by checking the moves count in PGN
-                moves = (m.movimientos_pgn or "").split()
-                active_color = "white" if len(moves) % 2 == 0 else "black"
+                board = self._build_board_from_stored_pgn(m.movimientos_pgn)
+                active_color = "white" if board.turn == chess.WHITE else "black"
                 is_my_turn = (active_color == "white" and is_white) or (active_color == "black" and not is_white)
                 
                 results.append({
@@ -552,15 +629,7 @@ class MatchService:
             elapsed = (now - last_move_time).total_seconds()
             
         # Reconstruct turn
-        board = chess.Board()
-        for mv in (match.movimientos_pgn or "").split():
-            try:
-                board.push_san(mv)
-            except ValueError:
-                try:
-                    board.push_uci(mv)
-                except ValueError:
-                    pass
+        board = self._build_board_from_stored_pgn(match.movimientos_pgn)
                     
         is_white_turn = board.turn == chess.WHITE
         
@@ -595,6 +664,7 @@ class MatchService:
                     
         if timed_out:
             new_rw, new_rb, change_w, change_b = self._finalize_match_ratings_and_stats(match, result)
+            self._stamp_pgn_after_result(match, "timeout")
             self.match_repo.update(match)
             return {
                 "type": "match_ended",

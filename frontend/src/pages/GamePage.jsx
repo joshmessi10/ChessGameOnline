@@ -8,6 +8,34 @@ import { useToast } from '../context/ToastContext';
 import api from '../api/auth';
 import { getPlayerColor, getUserOutcome, isMatchFinished } from '../utils/match';
 
+const parseMovesFromStoredPgn = (storedPgn) => {
+  if (!storedPgn || typeof storedPgn !== 'string') return [];
+  const normalized = storedPgn.trim();
+  if (!normalized) return [];
+
+  const chess = new Chess();
+  try {
+    if (chess.loadPgn(normalized)) {
+      return chess.history();
+    }
+  } catch {
+    // fallback to legacy tokenized notation
+  }
+
+  const fallback = [];
+  const temp = new Chess();
+  normalized.split(/\s+/).forEach((token) => {
+    if (!token || token.includes('.') || token.startsWith('[')) return;
+    try {
+      const move = temp.move(token);
+      if (move?.san) fallback.push(move.san);
+    } catch {
+      // ignore invalid tokens
+    }
+  });
+  return fallback;
+};
+
 const GamePage = () => {
   const { matchId } = useParams();
   const navigate = useNavigate();
@@ -82,16 +110,10 @@ const GamePage = () => {
       setTimeLeftBlack(matchData.tiempo_restante_negras);
       lastMoveTimeRef.current = matchData.ultima_jugada_en ? new Date(matchData.ultima_jugada_en) : null;
 
-      // Reconstruct board state from moves
+      // Reconstruct board state from official PGN (or legacy fallback).
       const newGame = new Chess();
-      const moves = matchData.movimientos_pgn ? matchData.movimientos_pgn.split(' ') : [];
-      for (let m of moves) {
-        try {
-          newGame.move(m);
-        } catch (e) {
-          console.error("Error loading historical move: ", m, e);
-        }
-      }
+      const moves = parseMovesFromStoredPgn(matchData.movimientos_pgn);
+      for (const m of moves) newGame.move(m);
       setGame(newGame);
       setMoveCount(moves.length);
 
@@ -575,6 +597,7 @@ const GamePage = () => {
   const userColor = getPlayerColor(user?.id, match);
   const matchOutcome = getUserOutcome(user?.id, match);
   const matchFinished = isMatchFinished(match);
+  const notationMoves = parseMovesFromStoredPgn(match?.movimientos_pgn);
 
   if (!userColor) {
     return (
@@ -882,9 +905,9 @@ const GamePage = () => {
             Notation Engine
           </div>
           <div style={{ padding: '1rem', fontSize: '13px', color: 'var(--text-secondary)', fontFamily: 'monospace', overflowY: 'auto', flex: 1 }}>
-            {moveCount === 0 || !match?.movimientos_pgn ? 'Awaiting initial opening...' : (
+            {notationMoves.length === 0 ? 'Awaiting initial opening...' : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                {match.movimientos_pgn.trim().split(' ').reduce((acc, move, idx) => {
+                {notationMoves.reduce((acc, move, idx) => {
                   if (idx % 2 === 0) {
                     acc.push({ turn: Math.floor(idx / 2) + 1, white: move, black: '' });
                   } else {
