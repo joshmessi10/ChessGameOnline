@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timezone
 from typing import Optional, TYPE_CHECKING
 from sqlmodel import SQLModel, Field, Relationship
@@ -9,7 +10,7 @@ if TYPE_CHECKING:
 class Match(SQLModel, table=True):
     __tablename__ = "partidas"
     
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: Optional[str] = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
     jugador_blancas_id: int = Field(foreign_key="usuarios.id", nullable=False)
     jugador_negras_id: int = Field(foreign_key="usuarios.id", nullable=False)
     modo: MatchType = Field(nullable=False)

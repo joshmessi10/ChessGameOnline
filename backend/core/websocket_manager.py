@@ -4,15 +4,15 @@ from fastapi import WebSocket
 class ConnectionManager:
     def __init__(self):
         # Maps match_id to a list of active WebSockets
-        self.active_connections: Dict[int, List[WebSocket]] = {}
+        self.active_connections: Dict[str, List[WebSocket]] = {}
 
-    async def connect(self, match_id: int, websocket: WebSocket):
+    async def connect(self, match_id: str, websocket: WebSocket):
         await websocket.accept()
         if match_id not in self.active_connections:
             self.active_connections[match_id] = []
         self.active_connections[match_id].append(websocket)
 
-    def disconnect(self, match_id: int, websocket: WebSocket):
+    def disconnect(self, match_id: str, websocket: WebSocket):
         if match_id in self.active_connections:
             if websocket in self.active_connections[match_id]:
                 self.active_connections[match_id].remove(websocket)
@@ -22,7 +22,7 @@ class ConnectionManager:
     async def send_personal_message(self, message: dict, websocket: WebSocket):
         await websocket.send_json(message)
 
-    async def broadcast_to_match(self, match_id: int, message: dict):
+    async def broadcast_to_match(self, match_id: str, message: dict):
         if match_id in self.active_connections:
             # Create a copy of the list to avoid modification issues during iteration
             for connection in list(self.active_connections[match_id]):

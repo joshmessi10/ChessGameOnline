@@ -24,7 +24,7 @@ class MatchService:
         self.user_repo = UsuarioRepository(session)
 
 
-    def get_match(self, match_id: int, user_id: int) -> MatchResponse:
+    def get_match(self, match_id: str, user_id: int) -> MatchResponse:
         match = self.match_repo.find_by_id(match_id)
         if not match:
             raise HTTPException(status_code=404, detail="Match not found")
@@ -218,7 +218,7 @@ class MatchService:
         match.movimientos_pgn = game.accept(exporter).strip()
 
 
-    def end_match(self, match_id: int, user_id: int, request: EndMatchRequest) -> dict:
+    def end_match(self, match_id: str, user_id: int, request: EndMatchRequest) -> dict:
         match = self.match_repo.find_by_id(match_id)
         if not match or match.estado != MatchStatus.IN_PROGRESS:
             raise HTTPException(status_code=400, detail="Match not active")
@@ -298,7 +298,7 @@ class MatchService:
             message="Challenge sent successfully"
         )
 
-    def join_match(self, match_id: int, user_id: int) -> dict:
+    def join_match(self, match_id: str, user_id: int) -> dict:
         match = self.match_repo.find_by_id(match_id)
         if not match:
             raise HTTPException(status_code=404, detail="Invitation match not found")
@@ -339,7 +339,7 @@ class MatchService:
             "broadcast_payload": broadcast_payload
         }
 
-    def decline_invite(self, match_id: int, user_id: int) -> dict:
+    def decline_invite(self, match_id: str, user_id: int) -> dict:
         match = self.match_repo.find_by_id(match_id)
         if not match:
             raise HTTPException(status_code=404, detail="Invitation match not found")
@@ -412,7 +412,7 @@ class MatchService:
         )
 
 
-    def make_move(self, match_id: int, user_id: int, request: MoveRequest) -> dict:
+    def make_move(self, match_id: str, user_id: int, request: MoveRequest) -> dict:
         match = self.match_repo.find_by_id(match_id)
         if not match or match.estado != MatchStatus.IN_PROGRESS:
             raise HTTPException(status_code=400, detail="Match is not active")
@@ -617,7 +617,7 @@ class MatchService:
         except Exception:
             return 600, 0
 
-    def check_and_apply_timeout(self, match_id: int) -> Optional[dict]:
+    def check_and_apply_timeout(self, match_id: str) -> Optional[dict]:
         match = self.match_repo.find_by_id(match_id)
         if not match or match.estado != MatchStatus.IN_PROGRESS:
             return None
