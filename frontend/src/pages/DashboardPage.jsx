@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/auth';
-import { LuPlay, LuUsers, LuUser, LuSearch, LuTrophy, LuHistory, LuTrendingUp } from 'react-icons/lu';
+import { LuPlay, LuUsers, LuUser, LuSearch, LuTrophy, LuHistory, LuTrendingUp, LuFileText } from 'react-icons/lu';
 import chessHero from '../components/chess.svg';
 
 const StatCard = ({ label, value, icon: Icon, color }) => (
@@ -186,6 +186,7 @@ const DashboardPage = () => {
         <ActionCard to="/search" icon={LuSearch} title="Player Database" desc="Find opponents, study their games, and compare stats." />
         <ActionCard to="/friends" icon={LuUsers} title="Social Hub" desc="Manage your inner circle and pending invitations." />
         <ActionCard to="/profile/me" icon={LuUser} title="Legacy Profile" desc="Analyze your detailed history and progression." />
+        <ActionCard to="/pgn" icon={LuFileText} title="PGN Viewer" desc="Upload and analyze chess games from PGN files." />
       </div>
 
       {/* Hero Graphic - Isometric Chessboard SVG (Absolute Background) */}

@@ -19,6 +19,7 @@ import MatchDetailPage from './pages/MatchDetailPage';
 import ResultPage from './pages/ResultPage';
 import GamePage from './pages/GamePage';
 import SettingsPage from './pages/SettingsPage';
+import PgnViewerPage from './pages/PgnViewerPage';
 
 const App = () => {
   return (
@@ -62,6 +63,9 @@ const App = () => {
               } />
               <Route path="/settings" element={
                 <ProtectedRoute><SettingsPage /></ProtectedRoute>
+              } />
+              <Route path="/pgn" element={
+                <ProtectedRoute><PgnViewerPage /></ProtectedRoute>
               } />
 
               {/* Catch all */}
