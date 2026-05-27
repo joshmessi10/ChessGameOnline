@@ -23,11 +23,7 @@ const PgnViewerPage = () => {
 
     try {
       const tempGame = new Chess();
-      const success = tempGame.loadPgn(trimmed);
-      if (!success) {
-        setError('Invalid PGN format. Please check and try again.');
-        return;
-      }
+      tempGame.loadPgn(trimmed);
 
       const parsedHeaders = tempGame.header();
       const history = tempGame.history({ verbose: true });
