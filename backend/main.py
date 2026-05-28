@@ -3,6 +3,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import create_db_and_tables
 from .routers import auth, profile, match, matchmaking, users, friends, settings
+import asyncio
+from sqlmodel import Session
+from .database import engine
+from .services.matchmaking_service import MatchmakingService
+from .models.enums import MatchType
+from .core.websocket_manager import websocket_manager
 
 app = FastAPI(title="Proyecto Ajedrez API")
 
@@ -25,12 +31,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-import asyncio
-from sqlmodel import Session
-from .database import engine
-from .services.matchmaking_service import MatchmakingService
-from .models.enums import MatchType
-
 async def matchmaking_worker():
     while True:
         try:
@@ -49,6 +49,7 @@ async def matchmaking_worker():
 async def on_startup():
     create_db_and_tables()
     asyncio.create_task(matchmaking_worker())
+    websocket_manager.start_heartbeat_monitor()
 
 # Include Routers
 app.include_router(auth.router)
