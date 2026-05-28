@@ -209,7 +209,7 @@ const GamePage = () => {
           
           setTimeLeftWhite(data.tiempo_restante_blancas);
           setTimeLeftBlack(data.tiempo_restante_negras);
-          lastMoveTimeRef.current = data.ultima_jugada_en ? new Date(data.ultima_jugada_en + (data.ultima_jugada_en.endsWith('Z') || data.ultima_jugada_en.includes('+') ? '' : 'Z')) : null;
+          lastMoveTimeRef.current = data.ultima_jugada_en ? new Date(data.ultima_jugada_en) : null;
           
           // Update match state
           setMatch(prev => ({
@@ -250,7 +250,7 @@ const GamePage = () => {
           if (data.tiempo_restante_blancas != null) {
             setTimeLeftWhite(data.tiempo_restante_blancas);
             setTimeLeftBlack(data.tiempo_restante_negras);
-            lastMoveTimeRef.current = data.ultima_jugada_en ? new Date(data.ultima_jugada_en + (data.ultima_jugada_en.endsWith('Z') || data.ultima_jugada_en.includes('+') ? '' : 'Z')) : new Date();
+            lastMoveTimeRef.current = data.ultima_jugada_en ? new Date(data.ultima_jugada_en) : new Date();
           }
           setMatch(prev => prev ? {
             ...prev,
