@@ -157,25 +157,35 @@ async def match_websocket(
     )
 
     # Cliente puede enviar JOIN explícito; STATE_SYNC ya se envió al conectar.
+    async def timeout_checker():
+        while True:
+            await asyncio.sleep(1.0)
+            service = MatchService(session)
+            timeout_payload = service.check_and_apply_timeout(matchID)
+            if timeout_payload:
+                await RealtimeGameService.apply_http_match_end_side_effects(
+                    matchID, timeout_payload
+                )
+                break
+
+    checker_task = asyncio.create_task(timeout_checker())
+
     try:
         while True:
-            try:
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=1.0)
-                await event_router.route(
-                    match_id=matchID,
-                    user_id=user_id,
-                    username=user.nombre_usuario,
-                    websocket=websocket,
-                    raw_text=data,
-                    session=session,
-                )
-            except asyncio.TimeoutError:
-                service = MatchService(session)
-                timeout_payload = service.check_and_apply_timeout(matchID)
-                if timeout_payload:
-                    await RealtimeGameService.apply_http_match_end_side_effects(
-                        matchID, timeout_payload
-                    )
+            data = await websocket.receive_text()
+            await event_router.route(
+                match_id=matchID,
+                user_id=user_id,
+                username=user.nombre_usuario,
+                websocket=websocket,
+                raw_text=data,
+                session=session,
+            )
     except WebSocketDisconnect:
         websocket_manager.disconnect(matchID, user_id)
         log_realtime(matchID, user_id, "DISCONNECT", "Client closed WebSocket")
+    except Exception as e:
+        websocket_manager.disconnect(matchID, user_id)
+        log_realtime(matchID, user_id, "ERROR", f"WebSocket exception: {e}")
+    finally:
+        checker_task.cancel()
