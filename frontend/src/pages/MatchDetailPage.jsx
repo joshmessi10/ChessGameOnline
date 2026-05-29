@@ -44,7 +44,7 @@ const MatchDetailPage = () => {
         const chess = new Chess();
         chess.loadPgn(match.movimientos_pgn);
         const history = chess.history({ verbose: true });
-        
+
         const chessTemp = new Chess();
         const movesWithFen = history.map(move => {
           chessTemp.move(move.san);
@@ -77,8 +77,8 @@ const MatchDetailPage = () => {
   if (!match) return <div style={{ padding: '5rem', textAlign: 'center' }}>Match log not found.</div>;
 
   const isWhite = match.jugador_blancas_id === user?.id;
-  const resultText = match.resultado === 'draw' ? 'Draw' : 
-                    (match.resultado === (isWhite ? 'white_win' : 'black_win') ? 'Victory' : 'Defeat');
+  const resultText = match.resultado === 'draw' ? 'Draw' :
+    (match.resultado === (isWhite ? 'white_win' : 'black_win') ? 'Victory' : 'Defeat');
 
   const goToFirst = () => {
     setCurrentMoveIndex(-1);
@@ -119,9 +119,9 @@ const MatchDetailPage = () => {
         <LuArrowLeft size={16} /> Back to History
       </Link>
 
-      <div style={{ 
-        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', 
-        marginBottom: '4rem', paddingBottom: '3rem', borderBottom: '1px solid var(--border-color)' 
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+        marginBottom: '4rem', paddingBottom: '3rem', borderBottom: '1px solid var(--border-color)'
       }}>
         <div>
           <h1 style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>Match Analysis</h1>
@@ -175,12 +175,12 @@ const MatchDetailPage = () => {
           <h3 style={{ fontSize: '14px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--text-secondary)', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <LuFileText size={18} /> Moves
           </h3>
-          <div style={{ 
-            backgroundColor: 'var(--surface-color)', 
-            border: '1px solid var(--border-color)', 
-            padding: '1.5rem', 
-            fontFamily: 'monospace', 
-            fontSize: '14px', 
+          <div style={{
+            backgroundColor: 'var(--surface-color)',
+            border: '1px solid var(--border-color)',
+            padding: '1.5rem',
+            fontFamily: 'monospace',
+            fontSize: '14px',
             maxHeight: '400px',
             overflowY: 'auto'
           }}>
@@ -189,12 +189,12 @@ const MatchDetailPage = () => {
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
                 {moves.map((move, index) => (
-                  <div 
-                    key={index} 
+                  <div
+                    key={index}
                     onClick={() => selectMove(index)}
-                    style={{ 
-                      padding: '8px 12px', 
-                      cursor: 'pointer', 
+                    style={{
+                      padding: '8px 12px',
+                      cursor: 'pointer',
                       backgroundColor: currentMoveIndex === index ? '#2563eb' : 'transparent',
                       color: currentMoveIndex === index ? '#fff' : 'var(--text-primary)',
                       borderRadius: '4px',
@@ -246,7 +246,7 @@ const MatchDetailPage = () => {
           >
             <LuFileText size={14} /> Download PGN
           </button>
-          <Link to="/pgn-viewer" className="secondary-btn" style={{ fontSize: '12px', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Link to="/pgn" className="secondary-btn" style={{ fontSize: '12px', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             Open PGN Analyzer
           </Link>
         </div>
