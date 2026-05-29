@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import api from '../api/auth';
 import { getPlayerColor, getUserOutcome, isMatchFinished } from '../utils/match';
+import { coerceClockSeconds, formatClockSeconds } from '../utils/clock';
 
 const parseMovesFromStoredPgn = (storedPgn) => {
   if (!storedPgn || typeof storedPgn !== 'string') return [];
@@ -57,8 +58,8 @@ const GamePage = () => {
   const tickingColorRef = useRef(null);
 
   const syncClocksFromServer = (whiteSec, blackSec, ultimaJugadaEn, tickingColor) => {
-    const w = whiteSec != null ? Number(whiteSec) : null;
-    const b = blackSec != null ? Number(blackSec) : null;
+    const w = coerceClockSeconds(whiteSec);
+    const b = coerceClockSeconds(blackSec);
     clockBaseWhiteRef.current = w;
     clockBaseBlackRef.current = b;
     tickingColorRef.current = tickingColor;
@@ -379,13 +380,15 @@ const GamePage = () => {
 
       const elapsed = (Date.now() - lastMoveTimeRef.current.getTime()) / 1000;
       const ticking = tickingColorRef.current;
+      const baseW = Number(clockBaseWhiteRef.current);
+      const baseB = Number(clockBaseBlackRef.current);
 
       if (ticking === 'white') {
-        setTimeLeftWhite(Math.max(0, clockBaseWhiteRef.current - elapsed));
-        setTimeLeftBlack(clockBaseBlackRef.current);
+        setTimeLeftWhite(Math.max(0, baseW - elapsed));
+        setTimeLeftBlack(baseB);
       } else {
-        setTimeLeftBlack(Math.max(0, clockBaseBlackRef.current - elapsed));
-        setTimeLeftWhite(clockBaseWhiteRef.current);
+        setTimeLeftBlack(Math.max(0, baseB - elapsed));
+        setTimeLeftWhite(baseW);
       }
     }, 100);
 
@@ -658,15 +661,6 @@ const GamePage = () => {
   const opponent = userColor === 'white' ? blackPlayer : whitePlayer;
   const me = userColor === 'white' ? whitePlayer : blackPlayer;
 
-  const formatTime = (seconds) => {
-    if (seconds === null || seconds === undefined || Number.isNaN(Number(seconds))) return '--:--';
-    const s = Math.max(0, Number(seconds));
-    if (s <= 0) return '00:00';
-    const mins = Math.floor(s / 60);
-    const secs = Math.floor(s % 60);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
   const PlayerInfo = ({ player, color, isBottom }) => {
     const calculateCapturedPieces = (playerColor) => { const initial = { p: 8, n: 2, b: 2, r: 2, q: 1 }; const current = { p: 0, n: 0, b: 0, r: 0, q: 0 }; const board = game.board(); for (let row of board) { for (let square of row) { if (square && square.color === (playerColor === 'white' ? 'b' : 'w')) { current[square.type]++; } } } const captured = []; for (const type of ['q', 'r', 'b', 'n', 'p']) { const diff = initial[type] - current[type]; for (let i = 0; i < diff; i++) captured.push(type); } return captured; }; const isWhite = color === 'white';
     const timeLeft = isWhite ? timeLeftWhite : timeLeftBlack;
@@ -696,18 +690,30 @@ const GamePage = () => {
           </div>
         </div>
         <div style={{
-          padding: '6px 12px',
-          backgroundColor: isPlayerTurn ? '#f59e0b' : '#27272a',
-          color: isPlayerTurn ? '#09090b' : '#fff',
-          fontFamily: 'monospace',
-          fontSize: '18px',
-          fontWeight: 800,
-          borderRadius: '4px',
-          minWidth: '70px',
-          textAlign: 'center',
-          transition: 'all 0.15s ease'
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: '2px',
+          flexShrink: 0,
         }}>
-          {formatTime(timeLeft)}
+          <div
+            style={{
+              padding: '6px 12px',
+              backgroundColor: isPlayerTurn ? '#f59e0b' : '#27272a',
+              color: isPlayerTurn ? '#09090b' : '#fff',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+              fontSize: '18px',
+              fontWeight: 800,
+              borderRadius: '4px',
+              minWidth: '5.5ch',
+              textAlign: 'center',
+              fontVariantNumeric: 'tabular-nums',
+              letterSpacing: '0.02em',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {formatClockSeconds(timeLeft)}
+          </div>
         </div>
       </div>
     );

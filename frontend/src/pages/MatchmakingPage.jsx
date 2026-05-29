@@ -57,6 +57,9 @@ const MatchmakingPage = () => {
           if (data.matchID) {
             stopSearch();
             navigate(`/play/${data.matchID}`);
+          } else if (data.status === 'timeout') {
+            stopSearch();
+            showToast(data.message || 'Matchmaking timed out.', { type: 'error' });
           }
         } catch { }
       }, 3000);
@@ -72,11 +75,14 @@ const MatchmakingPage = () => {
   const startSearch = async () => {
     if (!mode) return;
     try {
-      await api.post('/matchmaking/join', { modo: mode });
+      const { data } = await api.post('/matchmaking/join', { modo: mode });
+      if (data.status === 'already_queued') {
+        showToast(data.message, { type: 'error' });
+      }
       setElapsed(0);
       setSearching(true);
-    } catch {
-      showToast('Could not join matchmaking. Check your connection and try again.');
+    } catch (err) {
+      showToast(err?.response?.data?.detail || 'Could not join matchmaking. Check your connection and try again.', { type: 'error' });
     }
   };
 
