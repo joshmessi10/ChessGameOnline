@@ -55,6 +55,21 @@ async def matchmaking_worker():
 # Initialize database and background workers
 @app.on_event("startup")
 async def on_startup():
+    # --- INICIO BLOQUE DE RESETEO TEMPORAL ---
+    # Este bloque borrará toda tu base de datos al iniciar el servidor.
+    from sqlmodel import SQLModel
+    from .database import engine
+    from .models.usuario import Usuario
+    from .models.match import Match
+    from .models.statistics import Statistics
+    from .models.rating import Rating
+    from .models.friendship import Friendship
+    
+    print("=== BORRANDO TODAS LAS TABLAS ===")
+    SQLModel.metadata.drop_all(engine)
+    print("=== TABLAS BORRADAS EXITOSAMENTE ===")
+    # --- FIN BLOQUE DE RESETEO TEMPORAL ---
+
     create_db_and_tables()
     asyncio.create_task(matchmaking_worker())
     websocket_manager.start_heartbeat_monitor()
