@@ -47,9 +47,7 @@ async def get_match(matchID: str, session: SessionDep, current_user: CurrentUser
 
 
 @router.post("/{matchID}/move", response_model=MoveResponse)
-async def make_move(
-    matchID: str, request: MoveRequest, session: SessionDep, current_user: CurrentUserDep
-):
+async def make_move(matchID: str, request: MoveRequest, session: SessionDep, current_user: CurrentUserDep):
     service = MatchService(session)
     result = service.make_move(matchID, current_user.id, request)
     await RealtimeGameService.apply_http_move_side_effects(
@@ -59,12 +57,7 @@ async def make_move(
 
 
 @router.put("/{matchID}/end", response_model=EndMatchResponse)
-async def end_match(
-    matchID: str,
-    request: EndMatchRequest,
-    session: SessionDep,
-    current_user: CurrentUserDep,
-):
+async def end_match(matchID: str, request: EndMatchRequest, session: SessionDep, current_user: CurrentUserDep):
     service = MatchService(session)
     result = service.end_match(matchID, current_user.id, request)
     await RealtimeGameService.apply_http_match_end_side_effects(
@@ -82,9 +75,7 @@ async def send_invite(
 
 
 @router.put("/invite/{inviteID}/accept")
-async def accept_invite(
-    inviteID: str, session: SessionDep, current_user: CurrentUserDep
-):
+async def accept_invite(inviteID: str, session: SessionDep, current_user: CurrentUserDep):
     service = MatchService(session)
     result = service.join_match(inviteID, current_user.id)
     rt = RealtimeGameService(session)
@@ -95,9 +86,7 @@ async def accept_invite(
 
 
 @router.delete("/invite/{inviteID}/decline")
-async def decline_invite(
-    inviteID: str, session: SessionDep, current_user: CurrentUserDep
-):
+async def decline_invite(inviteID: str, session: SessionDep, current_user: CurrentUserDep):
     service = MatchService(session)
     result = service.decline_invite(inviteID, current_user.id)
     await websocket_manager.broadcast_to_match(
@@ -107,10 +96,7 @@ async def decline_invite(
 
 
 @router.websocket("/{matchID}/ws")
-async def match_websocket(
-    websocket: WebSocket, matchID: str, session: Session = Depends(get_session)
-):
-    """Endpoint WebSocket delgado: autenticación + bucle → `event_router` (capa 2)."""
+async def match_websocket(websocket: WebSocket, matchID: str, session: Session = Depends(get_session)):
     token = websocket.query_params.get("token")
     if not token:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)

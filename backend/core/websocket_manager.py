@@ -26,38 +26,11 @@ HEARTBEAT_TIMEOUT_SECONDS = 45
 
 
 class ConnectionManager:
-    """
-    Pool de sockets por partida y jugador.
+    def __init__(self):
+        # Maps match_id to a list of active WebSockets
+        self.active_connections: Dict[str, List[WebSocket]] = {}
 
-    Heartbeat:
-      - `last_seen` se actualiza en cada mensaje entrante (vía EventRouter).
-      - El cliente debe enviar PING periódico (~25 s) si no hay otro tráfico.
-      - Si no hay actividad en HEARTBEAT_TIMEOUT_SECONDS, se cierra el socket.
-      - Evita partidas colgadas con un jugador “fantasma” tras cerrar la pestaña.
-    """
-
-    def __init__(self) -> None:
-        self.active_connections: Dict[str, Dict[str, WebSocket]] = {}
-        self.last_seen: Dict[str, Dict[str, datetime]] = {}
-        self._heartbeat_task: Optional[asyncio.Task] = None
-
-    def _log(self, match_id: str, user_id: str, event: str, detail: str) -> None:
-        logger.info("[%s][%s][%s] %s", match_id, user_id, event, detail)
-
-    async def connect(
-        self, match_id: str, user_id: str, websocket: WebSocket
-    ) -> bool:
-        """
-        Acepta el WebSocket y lo registra.
-
-        Returns:
-            True si hubo reconexión (mismo user_id, socket anterior reemplazado).
-        """
-        is_reconnect = (
-            match_id in self.active_connections
-            and user_id in self.active_connections[match_id]
-        )
-
+    async def connect(self, match_id: str, websocket: WebSocket):
         await websocket.accept()
 
         if match_id not in self.active_connections:
@@ -75,12 +48,7 @@ class ConnectionManager:
         else:
             self._log(match_id, user_id, "CONNECT", "WebSocket accepted")
 
-        room[user_id] = websocket
-        self.update_activity(match_id, user_id)
-        return is_reconnect
-
-    def disconnect(self, match_id: str, user_id: str) -> None:
-        """Elimina un jugador; limpia la sala si queda vacía."""
+    def disconnect(self, match_id: str, websocket: WebSocket):
         if match_id in self.active_connections:
             self.active_connections[match_id].pop(user_id, None)
             if not self.active_connections[match_id]:
@@ -165,5 +133,14 @@ class ConnectionManager:
             except Exception:
                 self.disconnect(match_id, user_id)
 
+    async def broadcast_to_match(self, match_id: str, message: dict):
+        if match_id in self.active_connections:
+            # Create a copy of the list to avoid modification issues during iteration
+            for connection in list(self.active_connections[match_id]):
+                try:
+                    await connection.send_json(message)
+                except Exception:
+                    # Connection might be dead, remove it safely
+                    self.disconnect(match_id, connection)
 
 websocket_manager = ConnectionManager()
