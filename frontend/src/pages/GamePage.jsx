@@ -63,7 +63,17 @@ const GamePage = () => {
     clockBaseWhiteRef.current = w;
     clockBaseBlackRef.current = b;
     tickingColorRef.current = tickingColor;
-    lastMoveTimeRef.current = ultimaJugadaEn ? new Date(ultimaJugadaEn) : new Date();
+    
+    let dt = new Date();
+    if (ultimaJugadaEn) {
+      let isoStr = ultimaJugadaEn;
+      if (!isoStr.endsWith('Z') && !/([+-]\d{2}:\d{2})$/.test(isoStr)) {
+        isoStr += 'Z';
+      }
+      dt = new Date(isoStr);
+    }
+    lastMoveTimeRef.current = dt;
+    
     setTimeLeftWhite(w);
     setTimeLeftBlack(b);
   };
