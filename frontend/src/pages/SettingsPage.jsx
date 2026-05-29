@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/auth';
 import { useAuth } from '../context/AuthContext';
 import { LuUser, LuMail, LuImage, LuGlobe, LuSettings, LuCheck } from 'react-icons/lu';
@@ -12,7 +13,8 @@ import {
 } from '../utils/validation';
 
 const SettingsPage = () => {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, logout } = useAuth();
+  const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
     nombre_usuario: '',
@@ -87,9 +89,17 @@ const SettingsPage = () => {
         pais: formData.pais.trim() || null,
       };
       const res = await api.put(`/settings/${user.id}`, payload);
-      updateUser(res.data);
-      setSuccess('Settings updated successfully!');
-      setTimeout(() => setSuccess(''), 4000);
+      if (user.nombre_usuario !== res.data.nombre_usuario) {
+        setSuccess('Username updated successfully. Please log in again with your new username.');
+        setTimeout(() => {
+          logout();
+          navigate('/login');
+        }, 3000);
+      } else {
+        updateUser(res.data);
+        setSuccess('Settings updated successfully!');
+        setTimeout(() => setSuccess(''), 4000);
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to persist configurations.');
     } finally {

@@ -116,6 +116,18 @@ class UserService:
             from fastapi import HTTPException
             raise HTTPException(status_code=404, detail="User not found")
             
+        from fastapi import HTTPException
+        
+        if settings.nombre_usuario != user.nombre_usuario:
+            existing_user = self.user_repo.find_by_username(settings.nombre_usuario)
+            if existing_user and existing_user.id != user_id:
+                raise HTTPException(status_code=400, detail="Username already registered")
+                
+        if settings.correo != user.correo:
+            existing_email = self.user_repo.find_by_email(settings.correo)
+            if existing_email and existing_email.id != user_id:
+                raise HTTPException(status_code=400, detail="Email already registered")
+            
         user.nombre_usuario = settings.nombre_usuario
         user.correo = settings.correo
         user.url_avatar = settings.url_avatar
