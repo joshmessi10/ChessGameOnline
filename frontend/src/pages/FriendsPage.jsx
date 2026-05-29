@@ -6,6 +6,7 @@ import FieldError from '../components/FieldError';
 import { validateSearchQuery } from '../utils/validation';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
+import { useAuth } from '../context/AuthContext';
 
 const TabButton = ({ active, onClick, icon: Icon, children, count }) => (
   <button onClick={onClick} style={{
@@ -34,6 +35,7 @@ const FriendsPage = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
+  const { user } = useAuth();
   const [tab, setTab] = useState('friends');
   const [friends, setFriends] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -56,7 +58,16 @@ const FriendsPage = () => {
       const { data } = await api.get('/friends');
       const all = Array.isArray(data) ? data : (data.friends || []);
       setFriends(all.filter(f => f.estado === 'accepted'));
-      setRequests(all.filter(f => f.estado === 'pending'));
+      
+      const allPending = all.filter(f => f.estado === 'pending');
+      const incoming = allPending.filter(f => f.usuario_id !== user?.id);
+      const outgoing = allPending.filter(f => f.usuario_id === user?.id);
+      
+      setRequests(incoming);
+      
+      const newSentRequests = {};
+      outgoing.forEach(r => { newSentRequests[r.amigo_id] = true; });
+      setSentRequests(newSentRequests);
 
       const resInv = await api.get('/match/invite/pending');
       setGameInvites(resInv.data || []);
