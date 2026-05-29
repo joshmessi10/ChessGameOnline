@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import api from '../api/auth';
 import { LuPlay, LuUsers, LuUser, LuSearch, LuTrophy, LuHistory, LuTrendingUp, LuFileText } from 'react-icons/lu';
 import chessHero from '../components/chess.svg';
@@ -49,13 +50,20 @@ const ActionCard = ({ to, icon: Icon, title, desc }) => (
 
 const DashboardPage = () => {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [activeMatches, setActiveMatches] = useState([]);
 
   useEffect(() => {
-    api.get('/profile/me').then(r => setProfile(r.data)).catch(() => {});
-    api.get('/match/active').then(r => setActiveMatches(r.data || [])).catch(() => {});
+    api.get('/profile/me').then(r => setProfile(r.data)).catch((err) => {
+      if (err?.response?.status === 401) return;
+      showToast('Could not load your profile data.', { type: 'error' });
+    });
+    api.get('/match/active').then(r => setActiveMatches(r.data || [])).catch((err) => {
+      if (err?.response?.status === 401) return;
+      showToast('Could not load active matches.', { type: 'error' });
+    });
   }, []);
 
   const stats = profile?.stats;

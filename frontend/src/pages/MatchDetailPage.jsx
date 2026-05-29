@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/auth';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { LuArrowLeft, LuFileText, LuUser, LuCalendar, LuTrophy, LuInfo, LuChevronLeft, LuChevronRight, LuChevronsLeft, LuChevronsRight } from 'react-icons/lu';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
@@ -9,13 +10,23 @@ import { Chessboard } from 'react-chessboard';
 const MatchDetailPage = () => {
   const { matchID: matchId } = useParams();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api.get(`/match/${matchId}`)
       .then(r => setMatch(r.data))
-      .catch(() => {})
+      .catch((err) => {
+        const detail = err?.response?.data?.detail;
+        if (err?.response?.status === 404) {
+          showToast('Match not found.', { type: 'error' });
+        } else if (err?.response?.status === 403) {
+          showToast('You are not a participant in this match.', { type: 'error' });
+        } else {
+          showToast(detail || 'Could not load match data.', { type: 'error' });
+        }
+      })
       .finally(() => setLoading(false));
   }, [matchId]);
 
@@ -188,9 +199,33 @@ const MatchDetailPage = () => {
         </div>
       </div>
 
-      <div style={{ marginTop: '4rem', padding: '2rem', backgroundColor: '#09090b', border: '1px solid var(--border-color)', textAlign: 'center' }}>
-        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>Want to analyze this position with the engine?</p>
-        <button className="primary-btn" style={{ fontSize: '12px', padding: '10px 24px' }}>Export to Analysis Tool</button>
+      <div style={{ marginTop: '4rem', padding: '2rem', backgroundColor: '#09090b', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>Download or analyze this game in standard PGN format.</p>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button
+            className="primary-btn"
+            style={{ fontSize: '12px', padding: '10px 24px' }}
+            onClick={() => {
+              const pgn = match?.movimientos_pgn;
+              if (!pgn) return;
+              const blob = new Blob([pgn], { type: 'application/x-chess-pgn' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `match_${matchId}_${match.playerWhiteUsername}_vs_${match.playerBlackUsername}.pgn`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            }}
+            disabled={!match?.movimientos_pgn}
+          >
+            <LuFileText size={14} /> Download PGN
+          </button>
+          <Link to="/pgn-viewer" className="secondary-btn" style={{ fontSize: '12px', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            Open PGN Analyzer
+          </Link>
+        </div>
       </div>
     </div>
   );

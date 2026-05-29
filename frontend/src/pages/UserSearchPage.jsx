@@ -29,8 +29,11 @@ const UserSearchPage = () => {
       const { data } = await api.get(`/users/search?q=${encodeURIComponent(trimmed)}`);
       setResults(data.results || []);
       setSearched(true);
-    } catch {
+    } catch (err) {
       setResults([]);
+      setSearched(true);
+      const detail = err?.response?.data?.detail;
+      showToast(detail || 'Search failed. Please try again.', { type: 'error' });
     } finally {
       setLoading(false);
     }

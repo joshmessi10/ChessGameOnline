@@ -45,8 +45,13 @@ const LoginPage = () => {
     try {
       await login({ username: username.trim(), password });
       navigate('/dashboard');
-    } catch {
-      setError('Check your credentials and try again.');
+    } catch (err) {
+      const detail = err?.response?.data?.detail;
+      setError(
+        typeof detail === 'string'
+          ? detail
+          : 'Check your credentials and try again.'
+      );
     } finally {
       setLoading(false);
     }
