@@ -6,7 +6,7 @@ class MatchRepository:
     def __init__(self, session: Session):
         self.session = session
 
-    def find_by_id(self, match_id: int) -> Optional[Match]:
+    def find_by_id(self, match_id: str) -> Optional[Match]:
         return self.session.get(Match, match_id)
 
     def find_by_player_id(self, player_id: int) -> List[Match]:

@@ -14,13 +14,13 @@ class MoveResponse(BaseModel):
     is_draw: bool
 
 class MatchStatusDTO(BaseModel):
-    match_id: int
+    match_id: str
     estado: MatchStatus
     resultado: MatchResult
     last_move: Optional[str]
 
 class MatchResponse(BaseModel):
-    id: int
+    id: str
     jugador_blancas_id: int
     jugador_negras_id: int
     playerWhiteUsername: str
@@ -41,7 +41,7 @@ class EndMatchRequest(BaseModel):
     reason: str
 
 class EndMatchResponse(BaseModel):
-    match_id: int
+    match_id: str
     result: MatchResult
     final_pgn: str
     newELOPlayerWhite: int

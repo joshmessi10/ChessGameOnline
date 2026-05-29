@@ -13,7 +13,7 @@ class MatchmakingService:
     }
     
     # Store resolved matches: user_id -> match_id
-    _matches: Dict[int, int] = {}
+    _matches: Dict[int, str] = {}
 
     def __init__(self, session: Session):
         self.session = session

@@ -23,7 +23,7 @@ class FriendListItemDTO(BaseModel):
     userELO: int
 
 class MatchHistoryItemDTO(BaseModel):
-    matchID: int
+    matchID: str
     opponentUsername: str
     result: str
     date: datetime

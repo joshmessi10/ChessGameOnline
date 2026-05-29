@@ -8,7 +8,7 @@ class InviteRequest(BaseModel):
     control_tiempo: str
 
 class InviteResponse(BaseModel):
-    id: int
+    id: str
     inviter_id: int
     invited_id: int
     status: str

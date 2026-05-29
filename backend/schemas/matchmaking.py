@@ -16,7 +16,7 @@ class QueueResponse(BaseModel):
     estimated_wait_time: int # in seconds
 
 class MatchNotification(BaseModel):
-    match_id: int
+    match_id: str
     opponent_id: int
     opponent_name: str
     color: str # "white" or "black"

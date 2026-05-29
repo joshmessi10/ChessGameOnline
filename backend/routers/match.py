@@ -137,7 +137,7 @@ async def match_websocket(
         return
 
     match_repo = MatchRepository(session)
-    match_obj = match_repo.find_by_id(int(matchID))
+    match_obj = match_repo.find_by_id(matchID)
     if not match_obj or (
         user.id != match_obj.jugador_blancas_id
         and user.id != match_obj.jugador_negras_id
