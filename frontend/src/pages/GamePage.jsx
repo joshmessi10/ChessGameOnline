@@ -63,7 +63,7 @@ const GamePage = () => {
     clockBaseWhiteRef.current = w;
     clockBaseBlackRef.current = b;
     tickingColorRef.current = tickingColor;
-    
+
     let dt = new Date();
     if (ultimaJugadaEn) {
       let isoStr = ultimaJugadaEn;
@@ -73,7 +73,7 @@ const GamePage = () => {
       dt = new Date(isoStr);
     }
     lastMoveTimeRef.current = dt;
-    
+
     setTimeLeftWhite(w);
     setTimeLeftBlack(b);
   };
@@ -111,7 +111,7 @@ const GamePage = () => {
       .then(({ data }) => {
         if (!cancelled) updateUser(data);
       })
-      .catch(() => {});
+      .catch(() => { });
 
     return () => { cancelled = true; };
   }, [user?.token, user?.id, updateUser]);
@@ -264,7 +264,7 @@ const GamePage = () => {
           const newGame = new Chess(data.board_state);
           setGame(newGame);
           setMoveCount(c => c + 1);
-          
+
           // Update match state
           setMatch(prev => ({
             ...prev,
@@ -324,7 +324,7 @@ const GamePage = () => {
           // Handle resignation/draw agreement
           const color = getPlayerColor(userRef.current?.id, matchRef.current);
           const eloDiff = color === 'white' ? data.eloChangePlayerWhite : data.eloChangePlayerBlack;
-          
+
           navigate('/result', {
             state: {
               matchData: {
@@ -355,7 +355,7 @@ const GamePage = () => {
         console.warn("[WebSocket] Connection closed", event);
         setWsConnected(false);
         if (pingInterval) clearInterval(pingInterval);
-        
+
         // Schedule reconnection
         reconnectTimeout = setTimeout(() => {
           connectWebSocket();
@@ -426,7 +426,7 @@ const GamePage = () => {
 
       // Call API
       const response = await api.post(`/match/${matchId}/move`, { move: uciMove });
-      
+
       const newGame = new Chess(response.data.board_state);
       setGame(newGame);
 
@@ -454,7 +454,7 @@ const GamePage = () => {
           showToast(detail, { type: 'error' });
         }
       } else {
-        showToast('Could not execute move. Check your connection.', { type: 'error' });
+        showToast('Could not execute move.', { type: 'error' });
       }
       return false;
     }
@@ -515,7 +515,7 @@ const GamePage = () => {
         moves.forEach(m => {
           const hasPiece = game.get(m.to);
           styles[m.to] = {
-            background: hasPiece 
+            background: hasPiece
               ? 'radial-gradient(circle, transparent 60%, rgba(245, 158, 11, 0.5) 62%)' // ring highlight for capture targets
               : 'radial-gradient(circle, rgba(245, 158, 11, 0.4) 25%, transparent 26%)', // dot highlight for empty move targets
             cursor: 'pointer'
@@ -548,7 +548,7 @@ const GamePage = () => {
         moves.forEach(m => {
           const hasPiece = game.get(m.to);
           styles[m.to] = {
-            background: hasPiece 
+            background: hasPiece
               ? 'radial-gradient(circle, transparent 60%, rgba(245, 158, 11, 0.5) 62%)'
               : 'radial-gradient(circle, rgba(245, 158, 11, 0.4) 25%, transparent 26%)',
             cursor: 'pointer'
@@ -577,7 +577,7 @@ const GamePage = () => {
     const userColor = getPlayerColor(user?.id, match);
     if (!userColor) return false;
     const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
-    
+
     // Only draggable on your turn
     if (userColor !== currentTurnColor) return false;
 
@@ -674,7 +674,7 @@ const GamePage = () => {
   const myTurn = !matchFinished && (
     (game.turn() === 'w' && userColor === 'white') || (game.turn() === 'b' && userColor === 'black')
   );
-  
+
   // Arrange players (Opponent on top, Current User on bottom)
   const opponent = userColor === 'white' ? blackPlayer : whitePlayer;
   const me = userColor === 'white' ? whitePlayer : blackPlayer;
@@ -683,7 +683,7 @@ const GamePage = () => {
     const calculateCapturedPieces = (playerColor) => { const initial = { p: 8, n: 2, b: 2, r: 2, q: 1 }; const current = { p: 0, n: 0, b: 0, r: 0, q: 0 }; const board = game.board(); for (let row of board) { for (let square of row) { if (square && square.color === (playerColor === 'white' ? 'b' : 'w')) { current[square.type]++; } } } const captured = []; for (const type of ['q', 'r', 'b', 'n', 'p']) { const diff = initial[type] - current[type]; for (let i = 0; i < diff; i++) captured.push(type); } return captured; }; const isWhite = color === 'white';
     const timeLeft = isWhite ? timeLeftWhite : timeLeftBlack;
     const isPlayerTurn = game.turn() === (isWhite ? 'w' : 'b') && match.estado === 'in_progress';
-    
+
     return (
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -804,7 +804,7 @@ const GamePage = () => {
   }
 
   return (
-    <div style={{ 
+    <div style={{
       maxWidth: '1200px', margin: '0 auto', padding: '2rem',
       display: 'grid', gridTemplateColumns: 'minmax(400px, 600px) 1fr', gap: '3rem',
       position: 'relative'
@@ -825,7 +825,7 @@ const GamePage = () => {
           animation: spin 1.2s linear infinite;
         }
       `}</style>
-      
+
       {overlayState && (
         <div style={{
           position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
@@ -888,15 +888,15 @@ const GamePage = () => {
       {/* Chessboard Area */}
       <div>
         <PlayerInfo player={opponent} color={userColor === 'white' ? 'black' : 'white'} />
-        
-        <div style={{ 
-          border: '1px solid var(--border-color)', 
-          padding: '10px', 
+
+        <div style={{
+          border: '1px solid var(--border-color)',
+          padding: '10px',
           backgroundColor: '#18181b',
           boxShadow: '0 20px 50px rgba(0,0,0,0.5)'
         }}>
-          <Chessboard 
-            position={game.fen()} 
+          <Chessboard
+            position={game.fen()}
             onPieceDrop={onDrop}
             onSquareClick={onSquareClick}
             customSquareStyles={customSquareStyles}
@@ -913,7 +913,7 @@ const GamePage = () => {
 
       {/* Control Area */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%' }}>
-        
+
         {/* Match Header */}
         <div style={{ padding: '1.5rem', backgroundColor: 'var(--surface-color)', border: '1px solid var(--border-color)' }}>
           <h2 style={{ fontSize: '18px', marginBottom: '4px', textTransform: 'capitalize' }}>
@@ -956,8 +956,8 @@ const GamePage = () => {
         </div>
 
         {/* Notation/History Box */}
-        <div style={{ 
-          flex: 1, backgroundColor: 'var(--surface-color)', 
+        <div style={{
+          flex: 1, backgroundColor: 'var(--surface-color)',
           border: '1px solid var(--border-color)', position: 'relative',
           minHeight: '200px', display: 'flex', flexDirection: 'column'
         }}>
@@ -988,14 +988,14 @@ const GamePage = () => {
 
         {/* Interaction Bar */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', backgroundColor: 'var(--border-color)', border: '1px solid var(--border-color)' }}>
-          <button 
+          <button
             onClick={handleOfferDraw}
             disabled={match.estado !== 'in_progress'}
             style={{ backgroundColor: 'var(--surface-color)', padding: '1rem', color: match.estado === 'in_progress' ? 'var(--text-primary)' : 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer' }}
           >
             <LuRotateCcw size={16} /> Draw Offer
           </button>
-          <button 
+          <button
             onClick={handleResign}
             disabled={match.estado !== 'in_progress'}
             style={{ backgroundColor: 'var(--surface-color)', padding: '1rem', color: match.estado === 'in_progress' ? 'var(--error-color)' : 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer' }}
@@ -1005,9 +1005,9 @@ const GamePage = () => {
         </div>
 
 
-        <button 
+        <button
           onClick={() => setShowChat(true)}
-          className="secondary-btn" 
+          className="secondary-btn"
           style={{ width: '100%', height: '50px', justifyContent: 'center' }}
         >
           <LuMessageSquare size={18} /> Open Tactical Chat
@@ -1066,11 +1066,11 @@ const GamePage = () => {
 
           {/* Chat Input form */}
           <form onSubmit={handleSendChat} style={{ padding: '1.5rem', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '8px' }}>
-            <input 
-              type="text" 
-              value={chatInput} 
-              onChange={e => setChatInput(e.target.value)} 
-              placeholder="Send tactical message..." 
+            <input
+              type="text"
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              placeholder="Send tactical message..."
               style={{ flex: 1, padding: '0.75rem', backgroundColor: 'var(--surface-color)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '4px', fontSize: '13px' }}
             />
             <button type="submit" className="primary-btn" style={{ padding: '0px 16px', borderRadius: '4px' }}>
