@@ -52,11 +52,33 @@ async def matchmaking_worker():
         except Exception as e:
             print(f"[Matchmaker Error] {e}")
 
+async def timeout_worker():
+    from sqlmodel import Session
+    from .database import engine
+    from .services.match_service import MatchService
+    from .repositories.match_repository import MatchRepository
+    from .realtime.game_service import RealtimeGameService
+    import asyncio
+    while True:
+        try:
+            await asyncio.sleep(2)
+            with Session(engine) as session:
+                match_repo = MatchRepository(session)
+                service = MatchService(session)
+                active_matches = match_repo.get_active_matches()
+                for m in active_matches:
+                    timeout_payload = service.check_and_apply_timeout(m.id)
+                    if timeout_payload:
+                        await RealtimeGameService.apply_http_match_end_side_effects(m.id, timeout_payload)
+        except Exception as e:
+            print(f"[Timeout Worker Error] {e}")
+
 # Initialize database and background workers
 @app.on_event("startup")
 async def on_startup():
     create_db_and_tables()
     asyncio.create_task(matchmaking_worker())
+    asyncio.create_task(timeout_worker())
     websocket_manager.start_heartbeat_monitor()
 
 # Include Routers

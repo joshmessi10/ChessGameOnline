@@ -157,19 +157,6 @@ async def match_websocket(
     )
 
     # Cliente puede enviar JOIN explícito; STATE_SYNC ya se envió al conectar.
-    async def timeout_checker():
-        while True:
-            await asyncio.sleep(1.0)
-            service = MatchService(session)
-            timeout_payload = service.check_and_apply_timeout(matchID)
-            if timeout_payload:
-                await RealtimeGameService.apply_http_match_end_side_effects(
-                    matchID, timeout_payload
-                )
-                break
-
-    checker_task = asyncio.create_task(timeout_checker())
-
     try:
         while True:
             data = await websocket.receive_text()
@@ -187,5 +174,3 @@ async def match_websocket(
     except Exception as e:
         websocket_manager.disconnect(matchID, user_id)
         log_realtime(matchID, user_id, "ERROR", f"WebSocket exception: {e}")
-    finally:
-        checker_task.cancel()

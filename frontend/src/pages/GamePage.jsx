@@ -919,9 +919,6 @@ const GamePage = () => {
           <h2 style={{ fontSize: '18px', marginBottom: '4px', textTransform: 'capitalize' }}>
             {match.modo} Ranked Match
           </h2>
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            Match ID: #{match.id}
-          </p>
           <div style={{ marginTop: '8px', fontSize: '12px', fontWeight: 800 }}>
             {matchOutcome ? (
               <span style={{
