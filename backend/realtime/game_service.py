@@ -35,7 +35,7 @@ class RealtimeGameService:
         self._match_service = MatchService(session)
 
     def _load_match(self, match_id: str) -> Optional[Match]:
-        return self._match_service.match_repo.find_by_id(int(match_id))
+        return self._match_service.match_repo.find_by_id(match_id)
 
     def _build_move_history(self, match: Match) -> list[str]:
         board = self._match_service._build_board_from_stored_pgn(match.movimientos_pgn)
@@ -171,7 +171,7 @@ class RealtimeGameService:
 
         try:
             result = self._match_service.make_move(
-                int(match_id), user_id, MoveRequest(move=move_str)
+                match_id, user_id, MoveRequest(move=move_str)
             )
         except HTTPException as exc:
             return emit_message(
@@ -221,7 +221,7 @@ class RealtimeGameService:
 
         try:
             result = self._match_service.end_match(
-                int(match_id), user_id, EndMatchRequest(reason="resignation")
+                match_id, user_id, EndMatchRequest(reason="resignation")
             )
         except HTTPException as exc:
             return emit_message(EventType.ERROR, {"code": "RESIGN_FAILED", "detail": exc.detail})
@@ -281,7 +281,7 @@ class RealtimeGameService:
 
         try:
             result = self._match_service.end_match(
-                int(match_id), user_id, EndMatchRequest(reason="draw")
+                match_id, user_id, EndMatchRequest(reason="draw")
             )
         except HTTPException as exc:
             return emit_message(EventType.ERROR, {"code": "DRAW_FAILED", "detail": exc.detail})

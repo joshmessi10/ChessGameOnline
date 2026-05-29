@@ -172,5 +172,7 @@ async def match_websocket(
         websocket_manager.disconnect(matchID, user_id)
         log_realtime(matchID, user_id, "DISCONNECT", "Client closed WebSocket")
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         websocket_manager.disconnect(matchID, user_id)
-        log_realtime(matchID, user_id, "ERROR", f"WebSocket exception: {e}")
+        log_realtime(matchID, user_id, "ERROR", f"WebSocket exception: {type(e).__name__}: {e}")

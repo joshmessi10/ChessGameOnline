@@ -149,7 +149,10 @@ class ConnectionManager:
         self.disconnect(match_id, user_id)
 
     async def send_personal_message(self, message: dict, websocket: WebSocket) -> None:
-        await websocket.send_json(message)
+        try:
+            await websocket.send_json(message)
+        except Exception:
+            logger.warning("Failed to send personal message — socket may be closing")
 
     async def broadcast_to_match(self, match_id: str, message: dict) -> None:
         if match_id not in self.active_connections:
