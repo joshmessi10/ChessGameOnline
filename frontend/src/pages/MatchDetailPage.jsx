@@ -13,6 +13,7 @@ const MatchDetailPage = () => {
   const { showToast } = useToast();
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     api.get(`/match/${matchId}`)
@@ -20,10 +21,13 @@ const MatchDetailPage = () => {
       .catch((err) => {
         const detail = err?.response?.data?.detail;
         if (err?.response?.status === 404) {
+          setError('Match not found.');
           showToast('Match not found.', { type: 'error' });
         } else if (err?.response?.status === 403) {
+          setError('You are not a participant in this match.');
           showToast('You are not a participant in this match.', { type: 'error' });
         } else {
+          setError(detail || 'Could not load match data.');
           showToast(detail || 'Could not load match data.', { type: 'error' });
         }
       })
@@ -61,6 +65,15 @@ const MatchDetailPage = () => {
   }, [match]);
 
   if (loading) return <div style={{ padding: '5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Retrieving match analysis...</div>;
+  if (error) return (
+    <div style={{ padding: '5rem', textAlign: 'center' }}>
+      <h2 style={{ color: 'var(--error-color)', marginBottom: '1rem' }}>Error Loading Match</h2>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>{error}</p>
+      <Link to="/profile/me" className="primary-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+        <LuArrowLeft size={16} /> Back to History
+      </Link>
+    </div>
+  );
   if (!match) return <div style={{ padding: '5rem', textAlign: 'center' }}>Match log not found.</div>;
 
   const isWhite = match.jugador_blancas_id === user?.id;
@@ -207,16 +220,27 @@ const MatchDetailPage = () => {
             style={{ fontSize: '12px', padding: '10px 24px' }}
             onClick={() => {
               const pgn = match?.movimientos_pgn;
-              if (!pgn) return;
-              const blob = new Blob([pgn], { type: 'application/x-chess-pgn' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `match_${matchId}_${match.playerWhiteUsername}_vs_${match.playerBlackUsername}.pgn`;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              URL.revokeObjectURL(url);
+              if (!pgn) {
+                showToast('PGN data is not available for this match.', { type: 'error' });
+                return;
+              }
+              try {
+                const whitePlayer = match.playerWhiteUsername || 'White';
+                const blackPlayer = match.playerBlackUsername || 'Black';
+                const blob = new Blob([pgn], { type: 'application/x-chess-pgn' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `match_${matchId}_${whitePlayer}_vs_${blackPlayer}.pgn`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast('PGN downloaded successfully.', { type: 'success' });
+              } catch (err) {
+                console.error("Download error:", err);
+                showToast('Failed to download PGN file.', { type: 'error' });
+              }
             }}
             disabled={!match?.movimientos_pgn}
           >
