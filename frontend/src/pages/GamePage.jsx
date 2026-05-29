@@ -53,13 +53,18 @@ const GamePage = () => {
   /** Segundos en el último sync con servidor (snapshot al hacer el último movimiento). */
   const clockBaseWhiteRef = useRef(null);
   const clockBaseBlackRef = useRef(null);
+  /** Quién debe descontar tiempo ahora ('white' | 'black'); no usar game.turn() en el intervalo. */
+  const tickingColorRef = useRef(null);
 
-  const syncClocksFromServer = (whiteSec, blackSec, ultimaJugadaEn) => {
-    clockBaseWhiteRef.current = whiteSec;
-    clockBaseBlackRef.current = blackSec;
-    lastMoveTimeRef.current = ultimaJugadaEn ? new Date(ultimaJugadaEn) : null;
-    setTimeLeftWhite(whiteSec);
-    setTimeLeftBlack(blackSec);
+  const syncClocksFromServer = (whiteSec, blackSec, ultimaJugadaEn, tickingColor) => {
+    const w = whiteSec != null ? Number(whiteSec) : null;
+    const b = blackSec != null ? Number(blackSec) : null;
+    clockBaseWhiteRef.current = w;
+    clockBaseBlackRef.current = b;
+    tickingColorRef.current = tickingColor;
+    lastMoveTimeRef.current = ultimaJugadaEn ? new Date(ultimaJugadaEn) : new Date();
+    setTimeLeftWhite(w);
+    setTimeLeftBlack(b);
   };
 
   // Chat states
@@ -117,16 +122,16 @@ const GamePage = () => {
       const response = await api.get(`/match/${matchId}`);
       const matchData = response.data;
       setMatch(matchData);
-      syncClocksFromServer(
-        matchData.tiempo_restante_blancas,
-        matchData.tiempo_restante_negras,
-        matchData.ultima_jugada_en
-      );
-
-      // Reconstruct board state from official PGN (or legacy fallback).
       const newGame = new Chess();
       const moves = parseMovesFromStoredPgn(matchData.movimientos_pgn);
       for (const m of moves) newGame.move(m);
+      const ticking = newGame.turn() === 'w' ? 'white' : 'black';
+      syncClocksFromServer(
+        matchData.tiempo_restante_blancas,
+        matchData.tiempo_restante_negras,
+        matchData.ultima_jugada_en,
+        ticking
+      );
       setGame(newGame);
       setMoveCount(moves.length);
 
@@ -218,29 +223,36 @@ const GamePage = () => {
         // STATE_SYNC: tablero completo tras reconexión (sin esto el cliente queda desfasado)
         if (data.type === 'state_sync' && (data.fen || data.board_state)) {
           const fen = data.fen || data.board_state;
-          setGame(new Chess(fen));
-          setMoveCount(data.move_history?.length ?? 0);
+          const syncGame = new Chess(fen);
           if (data.tiempo_restante_blancas != null) {
+            const ticking = syncGame.turn() === 'w' ? 'white' : 'black';
             syncClocksFromServer(
               data.tiempo_restante_blancas,
               data.tiempo_restante_negras,
-              data.ultima_jugada_en
+              data.ultima_jugada_en,
+              ticking
             );
           }
+          setGame(syncGame);
+          setMoveCount(data.move_history?.length ?? 0);
           loadGameData();
           return;
         }
 
         if (data.type === 'move_made') {
+          // Relojes ANTES de cambiar turno en pantalla (evita restar el tiempo del rival al entrar tu turno).
+          if (data.tiempo_restante_blancas != null) {
+            syncClocksFromServer(
+              data.tiempo_restante_blancas,
+              data.tiempo_restante_negras,
+              data.ultima_jugada_en,
+              data.turn === 'black' ? 'black' : 'white'
+            );
+          }
+
           const newGame = new Chess(data.board_state);
           setGame(newGame);
           setMoveCount(c => c + 1);
-
-          syncClocksFromServer(
-            data.tiempo_restante_blancas,
-            data.tiempo_restante_negras,
-            data.ultima_jugada_en
-          );
           
           // Update match state
           setMatch(prev => ({
@@ -282,7 +294,8 @@ const GamePage = () => {
             syncClocksFromServer(
               data.tiempo_restante_blancas,
               data.tiempo_restante_negras,
-              data.ultima_jugada_en || new Date().toISOString()
+              data.ultima_jugada_en || new Date().toISOString(),
+              data.turn === 'black' ? 'black' : 'white'
             );
           }
           setMatch(prev => prev ? {
@@ -356,17 +369,18 @@ const GamePage = () => {
     };
   }, [loading, matchId]);
 
-  // Countdown en cliente: un solo descuento desde el snapshot del último movimiento.
+  // Countdown: solo el color en tickingColorRef (sincronizado con el servidor), nunca game.turn().
   useEffect(() => {
     if (!match || match.estado !== 'in_progress') return;
 
     const interval = setInterval(() => {
-      if (!lastMoveTimeRef.current) return;
+      if (!lastMoveTimeRef.current || !tickingColorRef.current) return;
       if (clockBaseWhiteRef.current == null || clockBaseBlackRef.current == null) return;
 
       const elapsed = (Date.now() - lastMoveTimeRef.current.getTime()) / 1000;
+      const ticking = tickingColorRef.current;
 
-      if (game.turn() === 'w') {
+      if (ticking === 'white') {
         setTimeLeftWhite(Math.max(0, clockBaseWhiteRef.current - elapsed));
         setTimeLeftBlack(clockBaseBlackRef.current);
       } else {
@@ -376,7 +390,7 @@ const GamePage = () => {
     }, 100);
 
     return () => clearInterval(interval);
-  }, [match, game]);
+  }, [match]);
 
   // Helper to execute and commit move to server
   const executeMove = async (source, target) => {
@@ -645,16 +659,11 @@ const GamePage = () => {
   const me = userColor === 'white' ? whitePlayer : blackPlayer;
 
   const formatTime = (seconds) => {
-    if (seconds === null || seconds === undefined) return '--:--';
+    if (seconds === null || seconds === undefined || Number.isNaN(Number(seconds))) return '--:--';
     const s = Math.max(0, Number(seconds));
     if (s <= 0) return '00:00';
     const mins = Math.floor(s / 60);
     const secs = Math.floor(s % 60);
-    // Últimos 10 s: décimas (ej. 9.3), no confundir con minutos
-    if (s < 10) {
-      const tenths = Math.floor((s % 1) * 10);
-      return `0:${secs.toString().padStart(2, '0')}.${tenths}`;
-    }
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
