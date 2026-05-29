@@ -50,6 +50,17 @@ const GamePage = () => {
   const [timeLeftWhite, setTimeLeftWhite] = useState(null);
   const [timeLeftBlack, setTimeLeftBlack] = useState(null);
   const lastMoveTimeRef = useRef(null);
+  /** Segundos en el último sync con servidor (snapshot al hacer el último movimiento). */
+  const clockBaseWhiteRef = useRef(null);
+  const clockBaseBlackRef = useRef(null);
+
+  const syncClocksFromServer = (whiteSec, blackSec, ultimaJugadaEn) => {
+    clockBaseWhiteRef.current = whiteSec;
+    clockBaseBlackRef.current = blackSec;
+    lastMoveTimeRef.current = ultimaJugadaEn ? new Date(ultimaJugadaEn) : null;
+    setTimeLeftWhite(whiteSec);
+    setTimeLeftBlack(blackSec);
+  };
 
   // Chat states
   const [showChat, setShowChat] = useState(false);
@@ -106,9 +117,11 @@ const GamePage = () => {
       const response = await api.get(`/match/${matchId}`);
       const matchData = response.data;
       setMatch(matchData);
-      setTimeLeftWhite(matchData.tiempo_restante_blancas);
-      setTimeLeftBlack(matchData.tiempo_restante_negras);
-      lastMoveTimeRef.current = matchData.ultima_jugada_en ? new Date(matchData.ultima_jugada_en) : null;
+      syncClocksFromServer(
+        matchData.tiempo_restante_blancas,
+        matchData.tiempo_restante_negras,
+        matchData.ultima_jugada_en
+      );
 
       // Reconstruct board state from official PGN (or legacy fallback).
       const newGame = new Chess();
@@ -208,9 +221,11 @@ const GamePage = () => {
           setGame(new Chess(fen));
           setMoveCount(data.move_history?.length ?? 0);
           if (data.tiempo_restante_blancas != null) {
-            setTimeLeftWhite(data.tiempo_restante_blancas);
-            setTimeLeftBlack(data.tiempo_restante_negras);
-            lastMoveTimeRef.current = data.ultima_jugada_en ? new Date(data.ultima_jugada_en) : null;
+            syncClocksFromServer(
+              data.tiempo_restante_blancas,
+              data.tiempo_restante_negras,
+              data.ultima_jugada_en
+            );
           }
           loadGameData();
           return;
@@ -220,10 +235,12 @@ const GamePage = () => {
           const newGame = new Chess(data.board_state);
           setGame(newGame);
           setMoveCount(c => c + 1);
-          
-          setTimeLeftWhite(data.tiempo_restante_blancas);
-          setTimeLeftBlack(data.tiempo_restante_negras);
-          lastMoveTimeRef.current = data.ultima_jugada_en ? new Date(data.ultima_jugada_en) : null;
+
+          syncClocksFromServer(
+            data.tiempo_restante_blancas,
+            data.tiempo_restante_negras,
+            data.ultima_jugada_en
+          );
           
           // Update match state
           setMatch(prev => ({
@@ -262,9 +279,11 @@ const GamePage = () => {
             setMoveCount(0);
           }
           if (data.tiempo_restante_blancas != null) {
-            setTimeLeftWhite(data.tiempo_restante_blancas);
-            setTimeLeftBlack(data.tiempo_restante_negras);
-            lastMoveTimeRef.current = data.ultima_jugada_en ? new Date(data.ultima_jugada_en) : new Date();
+            syncClocksFromServer(
+              data.tiempo_restante_blancas,
+              data.tiempo_restante_negras,
+              data.ultima_jugada_en || new Date().toISOString()
+            );
           }
           setMatch(prev => prev ? {
             ...prev,
@@ -337,25 +356,22 @@ const GamePage = () => {
     };
   }, [loading, matchId]);
 
-  // Dynamic countdown timer for active player
+  // Countdown en cliente: un solo descuento desde el snapshot del último movimiento.
   useEffect(() => {
     if (!match || match.estado !== 'in_progress') return;
 
     const interval = setInterval(() => {
       if (!lastMoveTimeRef.current) return;
+      if (clockBaseWhiteRef.current == null || clockBaseBlackRef.current == null) return;
 
-      const now = new Date();
-      const elapsed = (now.getTime() - lastMoveTimeRef.current.getTime()) / 1000.0;
+      const elapsed = (Date.now() - lastMoveTimeRef.current.getTime()) / 1000;
 
-      const activeColor = game.turn(); // 'w' or 'b'
-      if (activeColor === 'w') {
-        if (match.tiempo_restante_blancas !== null && match.tiempo_restante_blancas !== undefined) {
-          setTimeLeftWhite(Math.max(0, match.tiempo_restante_blancas - elapsed));
-        }
+      if (game.turn() === 'w') {
+        setTimeLeftWhite(Math.max(0, clockBaseWhiteRef.current - elapsed));
+        setTimeLeftBlack(clockBaseBlackRef.current);
       } else {
-        if (match.tiempo_restante_negras !== null && match.tiempo_restante_negras !== undefined) {
-          setTimeLeftBlack(Math.max(0, match.tiempo_restante_negras - elapsed));
-        }
+        setTimeLeftBlack(Math.max(0, clockBaseBlackRef.current - elapsed));
+        setTimeLeftWhite(clockBaseWhiteRef.current);
       }
     }, 100);
 
@@ -630,16 +646,16 @@ const GamePage = () => {
 
   const formatTime = (seconds) => {
     if (seconds === null || seconds === undefined) return '--:--';
-    if (seconds <= 0) return '00:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    if (seconds < 10 && seconds > 0) {
-      const tenths = Math.floor((seconds % 1) * 10);
-      return `${secs}.${tenths}`;
+    const s = Math.max(0, Number(seconds));
+    if (s <= 0) return '00:00';
+    const mins = Math.floor(s / 60);
+    const secs = Math.floor(s % 60);
+    // Últimos 10 s: décimas (ej. 9.3), no confundir con minutos
+    if (s < 10) {
+      const tenths = Math.floor((s % 1) * 10);
+      return `0:${secs.toString().padStart(2, '0')}.${tenths}`;
     }
-    const minsStr = mins.toString().padStart(2, '0');
-    const secsStr = secs.toString().padStart(2, '0');
-    return `${minsStr}:${secsStr}`;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   const PlayerInfo = ({ player, color, isBottom }) => {

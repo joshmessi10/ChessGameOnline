@@ -375,24 +375,12 @@ class MatchService:
         user_w = self.user_repo.find_by_id(match.jugador_blancas_id)
         user_b = self.user_repo.find_by_id(match.jugador_negras_id)
         
+        # Relojes en segundos tal como están en BD (último movimiento).
+        # El cliente resta el tiempo transcurrido en vivo; no ajustar aquí para evitar
+        # doble descuento con el countdown del frontend.
         t_w = match.tiempo_restante_blancas
         t_b = match.tiempo_restante_negras
-        
-        if match.estado == MatchStatus.IN_PROGRESS and match.ultima_jugada_en:
-            now = datetime.now(timezone.utc)
-            last_move_time = match.ultima_jugada_en.replace(tzinfo=timezone.utc) if match.ultima_jugada_en.tzinfo is None else match.ultima_jugada_en
-            elapsed = (now - last_move_time).total_seconds()
-            
-            # Reconstruct turn
-            board = self._build_board_from_stored_pgn(match.movimientos_pgn)
-            
-            if board.turn == chess.WHITE:
-                if t_w is not None:
-                    t_w = max(0.0, t_w - elapsed)
-            else:
-                if t_b is not None:
-                    t_b = max(0.0, t_b - elapsed)
-                    
+
         return MatchResponse(
             id=match.id,
             jugador_blancas_id=match.jugador_blancas_id,
