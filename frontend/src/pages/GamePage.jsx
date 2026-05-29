@@ -446,9 +446,15 @@ const GamePage = () => {
       // Revert FEN silently on error (no browser alert popups!)
       setGame(new Chess(originalFen));
       const detail = err?.response?.data?.detail;
-      if (typeof detail === 'string' && detail.toLowerCase().includes('lost on time')) {
-        showToast('Time expired. This game was finished by timeout.');
-        loadGameData();
+      if (typeof detail === 'string') {
+        if (detail.toLowerCase().includes('lost on time')) {
+          showToast('Time expired. This game was finished by timeout.', { type: 'error' });
+          loadGameData();
+        } else {
+          showToast(detail, { type: 'error' });
+        }
+      } else {
+        showToast('Could not execute move. Check your connection.', { type: 'error' });
       }
       return false;
     }
@@ -600,7 +606,8 @@ const GamePage = () => {
       await api.put(`/match/${matchId}/end`, { reason: 'resignation' });
     } catch (err) {
       console.error(err);
-      showToast('Could not resign from the match.');
+      const detail = err?.response?.data?.detail;
+      showToast(detail || 'Could not resign from the match.', { type: 'error' });
     }
   };
 
@@ -620,7 +627,8 @@ const GamePage = () => {
       await api.put(`/match/${matchId}/end`, { reason: 'draw_agreement' });
     } catch (err) {
       console.error(err);
-      showToast('Could not accept the draw agreement.');
+      const detail = err?.response?.data?.detail;
+      showToast(detail || 'Could not accept the draw agreement.', { type: 'error' });
     }
   };
 

@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/auth';
+import { useToast } from '../context/ToastContext';
 import { LuTrophy, LuTrendingUp, LuHistory, LuUser, LuMapPin, LuCalendar, LuExternalLink } from 'react-icons/lu';
 
 const ProfilePage = () => {
   const { userID, userId } = useParams();
+  const { showToast } = useToast();
   const resolvedId = userID || userId;
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -17,7 +19,12 @@ const ProfilePage = () => {
       const endpoint = resolvedId && resolvedId !== 'me' ? `/profile/${resolvedId}` : '/profile/me';
       const { data } = await api.get(endpoint);
       setProfile(data);
-    } catch { }
+    } catch (err) {
+      const detail = err?.response?.data?.detail;
+      if (err?.response?.status !== 404) {
+        showToast(detail || 'Could not load profile. Please check your connection.', { type: 'error' });
+      }
+    }
     setLoading(false);
   };
 
