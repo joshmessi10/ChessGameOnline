@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import api from '../api/auth';
 import { getPlayerColor, getUserOutcome, isMatchFinished } from '../utils/match';
+import { coerceClockSeconds, formatClockSeconds } from '../utils/clock';
 
 const parseMovesFromStoredPgn = (storedPgn) => {
   if (!storedPgn || typeof storedPgn !== 'string') return [];
@@ -50,6 +51,32 @@ const GamePage = () => {
   const [timeLeftWhite, setTimeLeftWhite] = useState(null);
   const [timeLeftBlack, setTimeLeftBlack] = useState(null);
   const lastMoveTimeRef = useRef(null);
+  /** Segundos en el último sync con servidor (snapshot al hacer el último movimiento). */
+  const clockBaseWhiteRef = useRef(null);
+  const clockBaseBlackRef = useRef(null);
+  /** Quién debe descontar tiempo ahora ('white' | 'black'); no usar game.turn() en el intervalo. */
+  const tickingColorRef = useRef(null);
+
+  const syncClocksFromServer = (whiteSec, blackSec, ultimaJugadaEn, tickingColor) => {
+    const w = coerceClockSeconds(whiteSec);
+    const b = coerceClockSeconds(blackSec);
+    clockBaseWhiteRef.current = w;
+    clockBaseBlackRef.current = b;
+    tickingColorRef.current = tickingColor;
+
+    let dt = new Date();
+    if (ultimaJugadaEn) {
+      let isoStr = ultimaJugadaEn;
+      if (!isoStr.endsWith('Z') && !/([+-]\d{2}:\d{2})$/.test(isoStr)) {
+        isoStr += 'Z';
+      }
+      dt = new Date(isoStr);
+    }
+    lastMoveTimeRef.current = dt;
+
+    setTimeLeftWhite(w);
+    setTimeLeftBlack(b);
+  };
 
   // Chat states
   const [showChat, setShowChat] = useState(false);
@@ -84,7 +111,7 @@ const GamePage = () => {
       .then(({ data }) => {
         if (!cancelled) updateUser(data);
       })
-      .catch(() => {});
+      .catch(() => { });
 
     return () => { cancelled = true; };
   }, [user?.token, user?.id, updateUser]);
@@ -106,14 +133,16 @@ const GamePage = () => {
       const response = await api.get(`/match/${matchId}`);
       const matchData = response.data;
       setMatch(matchData);
-      setTimeLeftWhite(matchData.tiempo_restante_blancas);
-      setTimeLeftBlack(matchData.tiempo_restante_negras);
-      lastMoveTimeRef.current = matchData.ultima_jugada_en ? new Date(matchData.ultima_jugada_en) : null;
-
-      // Reconstruct board state from official PGN (or legacy fallback).
       const newGame = new Chess();
       const moves = parseMovesFromStoredPgn(matchData.movimientos_pgn);
       for (const m of moves) newGame.move(m);
+      const ticking = newGame.turn() === 'w' ? 'white' : 'black';
+      syncClocksFromServer(
+        matchData.tiempo_restante_blancas,
+        matchData.tiempo_restante_negras,
+        matchData.ultima_jugada_en,
+        ticking
+      );
       setGame(newGame);
       setMoveCount(moves.length);
 
@@ -197,20 +226,45 @@ const GamePage = () => {
         const data = JSON.parse(event.data);
 
         // Handle pong message
-        if (data.type === 'pong') {
+        if (data.type === 'pong' || data.type === 'PONG') {
           // Heartbeat acknowledged
           return;
         }
 
+        // STATE_SYNC: tablero completo tras reconexión (sin esto el cliente queda desfasado)
+        if (data.type === 'state_sync' && (data.fen || data.board_state)) {
+          const fen = data.fen || data.board_state;
+          const syncGame = new Chess(fen);
+          if (data.tiempo_restante_blancas != null) {
+            const ticking = syncGame.turn() === 'w' ? 'white' : 'black';
+            syncClocksFromServer(
+              data.tiempo_restante_blancas,
+              data.tiempo_restante_negras,
+              data.ultima_jugada_en,
+              ticking
+            );
+          }
+          setGame(syncGame);
+          setMoveCount(data.move_history?.length ?? 0);
+          loadGameData();
+          return;
+        }
+
         if (data.type === 'move_made') {
+          // Relojes ANTES de cambiar turno en pantalla (evita restar el tiempo del rival al entrar tu turno).
+          if (data.tiempo_restante_blancas != null) {
+            syncClocksFromServer(
+              data.tiempo_restante_blancas,
+              data.tiempo_restante_negras,
+              data.ultima_jugada_en,
+              data.turn === 'black' ? 'black' : 'white'
+            );
+          }
+
           const newGame = new Chess(data.board_state);
           setGame(newGame);
           setMoveCount(c => c + 1);
-          
-          setTimeLeftWhite(data.tiempo_restante_blancas);
-          setTimeLeftBlack(data.tiempo_restante_negras);
-          lastMoveTimeRef.current = data.ultima_jugada_en ? new Date(data.ultima_jugada_en + (data.ultima_jugada_en.endsWith('Z') || data.ultima_jugada_en.includes('+') ? '' : 'Z')) : null;
-          
+
           // Update match state
           setMatch(prev => ({
             ...prev,
@@ -248,9 +302,12 @@ const GamePage = () => {
             setMoveCount(0);
           }
           if (data.tiempo_restante_blancas != null) {
-            setTimeLeftWhite(data.tiempo_restante_blancas);
-            setTimeLeftBlack(data.tiempo_restante_negras);
-            lastMoveTimeRef.current = data.ultima_jugada_en ? new Date(data.ultima_jugada_en + (data.ultima_jugada_en.endsWith('Z') || data.ultima_jugada_en.includes('+') ? '' : 'Z')) : new Date();
+            syncClocksFromServer(
+              data.tiempo_restante_blancas,
+              data.tiempo_restante_negras,
+              data.ultima_jugada_en || new Date().toISOString(),
+              data.turn === 'black' ? 'black' : 'white'
+            );
           }
           setMatch(prev => prev ? {
             ...prev,
@@ -267,7 +324,7 @@ const GamePage = () => {
           // Handle resignation/draw agreement
           const color = getPlayerColor(userRef.current?.id, matchRef.current);
           const eloDiff = color === 'white' ? data.eloChangePlayerWhite : data.eloChangePlayerBlack;
-          
+
           navigate('/result', {
             state: {
               matchData: {
@@ -298,7 +355,7 @@ const GamePage = () => {
         console.warn("[WebSocket] Connection closed", event);
         setWsConnected(false);
         if (pingInterval) clearInterval(pingInterval);
-        
+
         // Schedule reconnection
         reconnectTimeout = setTimeout(() => {
           connectWebSocket();
@@ -323,30 +380,30 @@ const GamePage = () => {
     };
   }, [loading, matchId]);
 
-  // Dynamic countdown timer for active player
+  // Countdown: solo el color en tickingColorRef (sincronizado con el servidor), nunca game.turn().
   useEffect(() => {
     if (!match || match.estado !== 'in_progress') return;
 
     const interval = setInterval(() => {
-      if (!lastMoveTimeRef.current) return;
+      if (!lastMoveTimeRef.current || !tickingColorRef.current) return;
+      if (clockBaseWhiteRef.current == null || clockBaseBlackRef.current == null) return;
 
-      const now = new Date();
-      const elapsed = (now.getTime() - lastMoveTimeRef.current.getTime()) / 1000.0;
+      const elapsed = (Date.now() - lastMoveTimeRef.current.getTime()) / 1000;
+      const ticking = tickingColorRef.current;
+      const baseW = Number(clockBaseWhiteRef.current);
+      const baseB = Number(clockBaseBlackRef.current);
 
-      const activeColor = game.turn(); // 'w' or 'b'
-      if (activeColor === 'w') {
-        if (match.tiempo_restante_blancas !== null && match.tiempo_restante_blancas !== undefined) {
-          setTimeLeftWhite(Math.max(0, match.tiempo_restante_blancas - elapsed));
-        }
+      if (ticking === 'white') {
+        setTimeLeftWhite(Math.max(0, baseW - elapsed));
+        setTimeLeftBlack(baseB);
       } else {
-        if (match.tiempo_restante_negras !== null && match.tiempo_restante_negras !== undefined) {
-          setTimeLeftBlack(Math.max(0, match.tiempo_restante_negras - elapsed));
-        }
+        setTimeLeftBlack(Math.max(0, baseB - elapsed));
+        setTimeLeftWhite(baseW);
       }
     }, 100);
 
     return () => clearInterval(interval);
-  }, [match, game]);
+  }, [match]);
 
   // Helper to execute and commit move to server
   const executeMove = async (source, target) => {
@@ -369,7 +426,7 @@ const GamePage = () => {
 
       // Call API
       const response = await api.post(`/match/${matchId}/move`, { move: uciMove });
-      
+
       const newGame = new Chess(response.data.board_state);
       setGame(newGame);
 
@@ -389,9 +446,15 @@ const GamePage = () => {
       // Revert FEN silently on error (no browser alert popups!)
       setGame(new Chess(originalFen));
       const detail = err?.response?.data?.detail;
-      if (typeof detail === 'string' && detail.toLowerCase().includes('lost on time')) {
-        showToast('Time expired. This game was finished by timeout.');
-        loadGameData();
+      if (typeof detail === 'string') {
+        if (detail.toLowerCase().includes('lost on time')) {
+          showToast('Time expired. This game was finished by timeout.', { type: 'error' });
+          loadGameData();
+        } else {
+          showToast(detail, { type: 'error' });
+        }
+      } else {
+        showToast('Could not execute move.', { type: 'error' });
       }
       return false;
     }
@@ -452,7 +515,7 @@ const GamePage = () => {
         moves.forEach(m => {
           const hasPiece = game.get(m.to);
           styles[m.to] = {
-            background: hasPiece 
+            background: hasPiece
               ? 'radial-gradient(circle, transparent 60%, rgba(245, 158, 11, 0.5) 62%)' // ring highlight for capture targets
               : 'radial-gradient(circle, rgba(245, 158, 11, 0.4) 25%, transparent 26%)', // dot highlight for empty move targets
             cursor: 'pointer'
@@ -485,7 +548,7 @@ const GamePage = () => {
         moves.forEach(m => {
           const hasPiece = game.get(m.to);
           styles[m.to] = {
-            background: hasPiece 
+            background: hasPiece
               ? 'radial-gradient(circle, transparent 60%, rgba(245, 158, 11, 0.5) 62%)'
               : 'radial-gradient(circle, rgba(245, 158, 11, 0.4) 25%, transparent 26%)',
             cursor: 'pointer'
@@ -514,7 +577,7 @@ const GamePage = () => {
     const userColor = getPlayerColor(user?.id, match);
     if (!userColor) return false;
     const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
-    
+
     // Only draggable on your turn
     if (userColor !== currentTurnColor) return false;
 
@@ -543,7 +606,8 @@ const GamePage = () => {
       await api.put(`/match/${matchId}/end`, { reason: 'resignation' });
     } catch (err) {
       console.error(err);
-      showToast('Could not resign from the match.');
+      const detail = err?.response?.data?.detail;
+      showToast(detail || 'Could not resign from the match.', { type: 'error' });
     }
   };
 
@@ -563,7 +627,8 @@ const GamePage = () => {
       await api.put(`/match/${matchId}/end`, { reason: 'draw_agreement' });
     } catch (err) {
       console.error(err);
-      showToast('Could not accept the draw agreement.');
+      const detail = err?.response?.data?.detail;
+      showToast(detail || 'Could not accept the draw agreement.', { type: 'error' });
     }
   };
 
@@ -609,30 +674,16 @@ const GamePage = () => {
   const myTurn = !matchFinished && (
     (game.turn() === 'w' && userColor === 'white') || (game.turn() === 'b' && userColor === 'black')
   );
-  
+
   // Arrange players (Opponent on top, Current User on bottom)
   const opponent = userColor === 'white' ? blackPlayer : whitePlayer;
   const me = userColor === 'white' ? whitePlayer : blackPlayer;
-
-  const formatTime = (seconds) => {
-    if (seconds === null || seconds === undefined) return '--:--';
-    if (seconds <= 0) return '00:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    if (seconds < 10 && seconds > 0) {
-      const tenths = Math.floor((seconds % 1) * 10);
-      return `${secs}.${tenths}`;
-    }
-    const minsStr = mins.toString().padStart(2, '0');
-    const secsStr = secs.toString().padStart(2, '0');
-    return `${minsStr}:${secsStr}`;
-  };
 
   const PlayerInfo = ({ player, color, isBottom }) => {
     const calculateCapturedPieces = (playerColor) => { const initial = { p: 8, n: 2, b: 2, r: 2, q: 1 }; const current = { p: 0, n: 0, b: 0, r: 0, q: 0 }; const board = game.board(); for (let row of board) { for (let square of row) { if (square && square.color === (playerColor === 'white' ? 'b' : 'w')) { current[square.type]++; } } } const captured = []; for (const type of ['q', 'r', 'b', 'n', 'p']) { const diff = initial[type] - current[type]; for (let i = 0; i < diff; i++) captured.push(type); } return captured; }; const isWhite = color === 'white';
     const timeLeft = isWhite ? timeLeftWhite : timeLeftBlack;
     const isPlayerTurn = game.turn() === (isWhite ? 'w' : 'b') && match.estado === 'in_progress';
-    
+
     return (
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -657,18 +708,30 @@ const GamePage = () => {
           </div>
         </div>
         <div style={{
-          padding: '6px 12px',
-          backgroundColor: isPlayerTurn ? '#f59e0b' : '#27272a',
-          color: isPlayerTurn ? '#09090b' : '#fff',
-          fontFamily: 'monospace',
-          fontSize: '18px',
-          fontWeight: 800,
-          borderRadius: '4px',
-          minWidth: '70px',
-          textAlign: 'center',
-          transition: 'all 0.15s ease'
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: '2px',
+          flexShrink: 0,
         }}>
-          {formatTime(timeLeft)}
+          <div
+            style={{
+              padding: '6px 12px',
+              backgroundColor: isPlayerTurn ? '#f59e0b' : '#27272a',
+              color: isPlayerTurn ? '#09090b' : '#fff',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+              fontSize: '18px',
+              fontWeight: 800,
+              borderRadius: '4px',
+              minWidth: '5.5ch',
+              textAlign: 'center',
+              fontVariantNumeric: 'tabular-nums',
+              letterSpacing: '0.02em',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {formatClockSeconds(timeLeft)}
+          </div>
         </div>
       </div>
     );
@@ -741,7 +804,7 @@ const GamePage = () => {
   }
 
   return (
-    <div style={{ 
+    <div style={{
       maxWidth: '1200px', margin: '0 auto', padding: '2rem',
       display: 'grid', gridTemplateColumns: 'minmax(400px, 600px) 1fr', gap: '3rem',
       position: 'relative'
@@ -762,7 +825,7 @@ const GamePage = () => {
           animation: spin 1.2s linear infinite;
         }
       `}</style>
-      
+
       {overlayState && (
         <div style={{
           position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
@@ -825,15 +888,15 @@ const GamePage = () => {
       {/* Chessboard Area */}
       <div>
         <PlayerInfo player={opponent} color={userColor === 'white' ? 'black' : 'white'} />
-        
-        <div style={{ 
-          border: '1px solid var(--border-color)', 
-          padding: '10px', 
+
+        <div style={{
+          border: '1px solid var(--border-color)',
+          padding: '10px',
           backgroundColor: '#18181b',
           boxShadow: '0 20px 50px rgba(0,0,0,0.5)'
         }}>
-          <Chessboard 
-            position={game.fen()} 
+          <Chessboard
+            position={game.fen()}
             onPieceDrop={onDrop}
             onSquareClick={onSquareClick}
             customSquareStyles={customSquareStyles}
@@ -850,15 +913,12 @@ const GamePage = () => {
 
       {/* Control Area */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%' }}>
-        
+
         {/* Match Header */}
         <div style={{ padding: '1.5rem', backgroundColor: 'var(--surface-color)', border: '1px solid var(--border-color)' }}>
           <h2 style={{ fontSize: '18px', marginBottom: '4px', textTransform: 'capitalize' }}>
             {match.modo} Ranked Match
           </h2>
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            Match ID: #{match.id}
-          </p>
           <div style={{ marginTop: '8px', fontSize: '12px', fontWeight: 800 }}>
             {matchOutcome ? (
               <span style={{
@@ -896,8 +956,8 @@ const GamePage = () => {
         </div>
 
         {/* Notation/History Box */}
-        <div style={{ 
-          flex: 1, backgroundColor: 'var(--surface-color)', 
+        <div style={{
+          flex: 1, backgroundColor: 'var(--surface-color)',
           border: '1px solid var(--border-color)', position: 'relative',
           minHeight: '200px', display: 'flex', flexDirection: 'column'
         }}>
@@ -928,14 +988,14 @@ const GamePage = () => {
 
         {/* Interaction Bar */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', backgroundColor: 'var(--border-color)', border: '1px solid var(--border-color)' }}>
-          <button 
+          <button
             onClick={handleOfferDraw}
             disabled={match.estado !== 'in_progress'}
             style={{ backgroundColor: 'var(--surface-color)', padding: '1rem', color: match.estado === 'in_progress' ? 'var(--text-primary)' : 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer' }}
           >
             <LuRotateCcw size={16} /> Draw Offer
           </button>
-          <button 
+          <button
             onClick={handleResign}
             disabled={match.estado !== 'in_progress'}
             style={{ backgroundColor: 'var(--surface-color)', padding: '1rem', color: match.estado === 'in_progress' ? 'var(--error-color)' : 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer' }}
@@ -945,9 +1005,9 @@ const GamePage = () => {
         </div>
 
 
-        <button 
+        <button
           onClick={() => setShowChat(true)}
-          className="secondary-btn" 
+          className="secondary-btn"
           style={{ width: '100%', height: '50px', justifyContent: 'center' }}
         >
           <LuMessageSquare size={18} /> Open Tactical Chat
@@ -1006,11 +1066,11 @@ const GamePage = () => {
 
           {/* Chat Input form */}
           <form onSubmit={handleSendChat} style={{ padding: '1.5rem', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '8px' }}>
-            <input 
-              type="text" 
-              value={chatInput} 
-              onChange={e => setChatInput(e.target.value)} 
-              placeholder="Send tactical message..." 
+            <input
+              type="text"
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              placeholder="Send tactical message..."
               style={{ flex: 1, padding: '0.75rem', backgroundColor: 'var(--surface-color)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '4px', fontSize: '13px' }}
             />
             <button type="submit" className="primary-btn" style={{ padding: '0px 16px', borderRadius: '4px' }}>

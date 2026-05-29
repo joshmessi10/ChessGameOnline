@@ -6,6 +6,7 @@ import FieldError from '../components/FieldError';
 import { validateSearchQuery } from '../utils/validation';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
+import { useAuth } from '../context/AuthContext';
 
 const TabButton = ({ active, onClick, icon: Icon, children, count }) => (
   <button onClick={onClick} style={{
@@ -34,6 +35,7 @@ const FriendsPage = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
+  const { user } = useAuth();
   const [tab, setTab] = useState('friends');
   const [friends, setFriends] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -56,7 +58,16 @@ const FriendsPage = () => {
       const { data } = await api.get('/friends');
       const all = Array.isArray(data) ? data : (data.friends || []);
       setFriends(all.filter(f => f.estado === 'accepted'));
-      setRequests(all.filter(f => f.estado === 'pending'));
+      
+      const allPending = all.filter(f => f.estado === 'pending');
+      const incoming = allPending.filter(f => f.usuario_id !== user?.id);
+      const outgoing = allPending.filter(f => f.usuario_id === user?.id);
+      
+      setRequests(incoming);
+      
+      const newSentRequests = {};
+      outgoing.forEach(r => { newSentRequests[r.amigo_id] = true; });
+      setSentRequests(newSentRequests);
 
       const resInv = await api.get('/match/invite/pending');
       setGameInvites(resInv.data || []);
@@ -355,52 +366,16 @@ const FriendsPage = () => {
                 setMatchType(e.target.value);
                 if (e.target.value === 'bullet') setTimeControl('1+0');
                 else if (e.target.value === 'blitz') setTimeControl('3+2');
-                else if (e.target.value === 'rapid') setTimeControl('10+5');
+                else if (e.target.value === 'rapid') setTimeControl('10+0');
                 else setTimeControl('30+0');
               }} style={{
                 backgroundColor: 'var(--bg-color)', border: '1px solid var(--border-color)',
                 padding: '0.8rem', color: 'var(--text-primary)', width: '100%', fontSize: '14px'
               }}>
-                <option value="bullet">Bullet</option>
-                <option value="blitz">Blitz</option>
-                <option value="rapid">Rapid</option>
-                <option value="classical">Classical</option>
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Time Control</label>
-              <select value={timeControl} onChange={e => setTimeControl(e.target.value)} style={{
-                backgroundColor: 'var(--bg-color)', border: '1px solid var(--border-color)',
-                padding: '0.8rem', color: 'var(--text-primary)', width: '100%', fontSize: '14px'
-              }}>
-                {matchType === 'bullet' && (
-                  <>
-                    <option value="1+0">1+0 (Bullet)</option>
-                    <option value="2+1">2+1 (Bullet)</option>
-                  </>
-                )}
-                {matchType === 'blitz' && (
-                  <>
-                    <option value="3+0">3+0 (Blitz)</option>
-                    <option value="3+2">3+2 (Blitz)</option>
-                    <option value="5+0">5+0 (Blitz)</option>
-                    <option value="5+3">5+3 (Blitz)</option>
-                  </>
-                )}
-                {matchType === 'rapid' && (
-                  <>
-                    <option value="10+0">10+0 (Rapid)</option>
-                    <option value="10+5">10+5 (Rapid)</option>
-                    <option value="15+10">15+10 (Rapid)</option>
-                  </>
-                )}
-                {matchType === 'classical' && (
-                  <>
-                    <option value="30+0">30+0 (Classical)</option>
-                    <option value="30+30">30+30 (Classical)</option>
-                  </>
-                )}
+                <option value="bullet">Bullet (1+0)</option>
+                <option value="blitz">Blitz (3+2)</option>
+                <option value="rapid">Rapid (10+0)</option>
+                <option value="classical">Classical (30+0)</option>
               </select>
             </div>
 

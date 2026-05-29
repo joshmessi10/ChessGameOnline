@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/auth';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { LuArrowLeft, LuFileText, LuUser, LuCalendar, LuTrophy, LuInfo, LuChevronLeft, LuChevronRight, LuChevronsLeft, LuChevronsRight } from 'react-icons/lu';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
@@ -9,13 +10,27 @@ import { Chessboard } from 'react-chessboard';
 const MatchDetailPage = () => {
   const { matchID: matchId } = useParams();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     api.get(`/match/${matchId}`)
       .then(r => setMatch(r.data))
-      .catch(() => {})
+      .catch((err) => {
+        const detail = err?.response?.data?.detail;
+        if (err?.response?.status === 404) {
+          setError('Match not found.');
+          showToast('Match not found.', { type: 'error' });
+        } else if (err?.response?.status === 403) {
+          setError('You are not a participant in this match.');
+          showToast('You are not a participant in this match.', { type: 'error' });
+        } else {
+          setError(detail || 'Could not load match data.');
+          showToast(detail || 'Could not load match data.', { type: 'error' });
+        }
+      })
       .finally(() => setLoading(false));
   }, [matchId]);
 
@@ -29,7 +44,7 @@ const MatchDetailPage = () => {
         const chess = new Chess();
         chess.loadPgn(match.movimientos_pgn);
         const history = chess.history({ verbose: true });
-        
+
         const chessTemp = new Chess();
         const movesWithFen = history.map(move => {
           chessTemp.move(move.san);
@@ -50,11 +65,20 @@ const MatchDetailPage = () => {
   }, [match]);
 
   if (loading) return <div style={{ padding: '5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Retrieving match analysis...</div>;
+  if (error) return (
+    <div style={{ padding: '5rem', textAlign: 'center' }}>
+      <h2 style={{ color: 'var(--error-color)', marginBottom: '1rem' }}>Error Loading Match</h2>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>{error}</p>
+      <Link to="/profile/me" className="primary-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+        <LuArrowLeft size={16} /> Back to History
+      </Link>
+    </div>
+  );
   if (!match) return <div style={{ padding: '5rem', textAlign: 'center' }}>Match log not found.</div>;
 
   const isWhite = match.jugador_blancas_id === user?.id;
-  const resultText = match.resultado === 'draw' ? 'Draw' : 
-                    (match.resultado === (isWhite ? 'white_win' : 'black_win') ? 'Victory' : 'Defeat');
+  const resultText = match.resultado === 'draw' ? 'Draw' :
+    (match.resultado === (isWhite ? 'white_win' : 'black_win') ? 'Victory' : 'Defeat');
 
   const goToFirst = () => {
     setCurrentMoveIndex(-1);
@@ -95,9 +119,9 @@ const MatchDetailPage = () => {
         <LuArrowLeft size={16} /> Back to History
       </Link>
 
-      <div style={{ 
-        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', 
-        marginBottom: '4rem', paddingBottom: '3rem', borderBottom: '1px solid var(--border-color)' 
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+        marginBottom: '4rem', paddingBottom: '3rem', borderBottom: '1px solid var(--border-color)'
       }}>
         <div>
           <h1 style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>Match Analysis</h1>
@@ -151,12 +175,12 @@ const MatchDetailPage = () => {
           <h3 style={{ fontSize: '14px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--text-secondary)', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <LuFileText size={18} /> Moves
           </h3>
-          <div style={{ 
-            backgroundColor: 'var(--surface-color)', 
-            border: '1px solid var(--border-color)', 
-            padding: '1.5rem', 
-            fontFamily: 'monospace', 
-            fontSize: '14px', 
+          <div style={{
+            backgroundColor: 'var(--surface-color)',
+            border: '1px solid var(--border-color)',
+            padding: '1.5rem',
+            fontFamily: 'monospace',
+            fontSize: '14px',
             maxHeight: '400px',
             overflowY: 'auto'
           }}>
@@ -165,12 +189,12 @@ const MatchDetailPage = () => {
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
                 {moves.map((move, index) => (
-                  <div 
-                    key={index} 
+                  <div
+                    key={index}
                     onClick={() => selectMove(index)}
-                    style={{ 
-                      padding: '8px 12px', 
-                      cursor: 'pointer', 
+                    style={{
+                      padding: '8px 12px',
+                      cursor: 'pointer',
                       backgroundColor: currentMoveIndex === index ? '#2563eb' : 'transparent',
                       color: currentMoveIndex === index ? '#fff' : 'var(--text-primary)',
                       borderRadius: '4px',
@@ -188,9 +212,44 @@ const MatchDetailPage = () => {
         </div>
       </div>
 
-      <div style={{ marginTop: '4rem', padding: '2rem', backgroundColor: '#09090b', border: '1px solid var(--border-color)', textAlign: 'center' }}>
-        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>Want to analyze this position with the engine?</p>
-        <button className="primary-btn" style={{ fontSize: '12px', padding: '10px 24px' }}>Export to Analysis Tool</button>
+      <div style={{ marginTop: '4rem', padding: '2rem', backgroundColor: '#09090b', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>Download or analyze this game in standard PGN format.</p>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button
+            className="primary-btn"
+            style={{ fontSize: '12px', padding: '10px 24px' }}
+            onClick={() => {
+              const pgn = match?.movimientos_pgn;
+              if (!pgn) {
+                showToast('PGN data is not available for this match.', { type: 'error' });
+                return;
+              }
+              try {
+                const whitePlayer = match.playerWhiteUsername || 'White';
+                const blackPlayer = match.playerBlackUsername || 'Black';
+                const blob = new Blob([pgn], { type: 'application/x-chess-pgn' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `match_${matchId}_${whitePlayer}_vs_${blackPlayer}.pgn`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast('PGN downloaded successfully.', { type: 'success' });
+              } catch (err) {
+                console.error("Download error:", err);
+                showToast('Failed to download PGN file.', { type: 'error' });
+              }
+            }}
+            disabled={!match?.movimientos_pgn}
+          >
+            <LuFileText size={14} /> Download PGN
+          </button>
+          <Link to="/pgn" className="secondary-btn" style={{ fontSize: '12px', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            Open PGN Analyzer
+          </Link>
+        </div>
       </div>
     </div>
   );

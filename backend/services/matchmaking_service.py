@@ -64,8 +64,19 @@ class MatchmakingService:
 
         is_searching = False
         for mode in self._queues:
-            if any(p["user_id"] == user_id for p in self._queues[mode]):
-                is_searching = True
+            for p in self._queues[mode]:
+                if p["user_id"] == user_id:
+                    from datetime import datetime, timezone
+                    wait_time = (datetime.now(timezone.utc) - p["joined_at"]).total_seconds()
+                    if wait_time >= 300:
+                        self._queues[mode].remove(p)
+                        return {
+                            "status": "timeout", 
+                            "message": "You have been removed from the queue because there are no available players at the moment."
+                        }
+                    is_searching = True
+                    break
+            if is_searching:
                 break
 
         if is_searching:
