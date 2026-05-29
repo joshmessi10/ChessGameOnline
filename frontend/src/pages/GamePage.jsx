@@ -197,8 +197,22 @@ const GamePage = () => {
         const data = JSON.parse(event.data);
 
         // Handle pong message
-        if (data.type === 'pong') {
+        if (data.type === 'pong' || data.type === 'PONG') {
           // Heartbeat acknowledged
+          return;
+        }
+
+        // STATE_SYNC: tablero completo tras reconexión (sin esto el cliente queda desfasado)
+        if (data.type === 'state_sync' && (data.fen || data.board_state)) {
+          const fen = data.fen || data.board_state;
+          setGame(new Chess(fen));
+          setMoveCount(data.move_history?.length ?? 0);
+          if (data.tiempo_restante_blancas != null) {
+            setTimeLeftWhite(data.tiempo_restante_blancas);
+            setTimeLeftBlack(data.tiempo_restante_negras);
+            lastMoveTimeRef.current = data.ultima_jugada_en ? new Date(data.ultima_jugada_en) : null;
+          }
+          loadGameData();
           return;
         }
 

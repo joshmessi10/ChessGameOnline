@@ -1,3 +1,4 @@
+import logging
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +10,13 @@ from .database import engine
 from .services.matchmaking_service import MatchmakingService
 from .models.enums import MatchType
 from .core.websocket_manager import websocket_manager
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+logging.getLogger("chess.realtime").setLevel(logging.INFO)
+logging.getLogger("chess.websocket").setLevel(logging.INFO)
 
 app = FastAPI(title="Proyecto Ajedrez API")
 
