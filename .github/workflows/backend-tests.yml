@@ -1,4 +1,4 @@
-name: Backend CI – Tests HU-1
+name: Backend CI – Pruebas Unitarias (HU-1, HU-2)
 
 on:
   push:
@@ -14,11 +14,11 @@ on:
 
 jobs:
   test:
-    name: Run pytest (HU-1 Auth Tests)
+    name: pytest – Backend test suite
     runs-on: ubuntu-latest
 
     env:
-      # Usamos SQLite en memoria para CI – sin base de datos externa
+      # SQLite en memoria para CI – sin base de datos externa
       DATABASE_URL: "sqlite://"
       SECRET_KEY: "ci-secret-key-not-for-production"
 
@@ -49,11 +49,12 @@ jobs:
           pip install pytest pytest-cov httpx
 
       # ------------------------------------------------------------------
-      # 4. Ejecutar tests de HU-1
+      # 4. Ejecutar toda la suite de tests del backend
+      #    (recoge automáticamente cualquier test_hu*.py nuevo que se agregue)
       # ------------------------------------------------------------------
-      - name: Run HU-1 Auth tests
+      - name: Run backend test suite
         run: |
-          python -m pytest backend/tests/test_hu1_auth.py \
+          python -m pytest backend/tests/ \
             -v \
             --tb=short \
             --cov=backend \
@@ -61,7 +62,17 @@ jobs:
             --cov-report=xml:coverage.xml
 
       # ------------------------------------------------------------------
-      # 5. Publicar reporte de cobertura (visible en el PR como artefacto)
+      # 5. Resumen legible en el panel de GitHub Actions
+      # ------------------------------------------------------------------
+      - name: Test summary
+        if: always()
+        run: |
+          echo "## 🧪 Resultado de Pruebas Unitarias" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          python -m pytest backend/tests/ --tb=no -q 2>&1 | tail -3 >> $GITHUB_STEP_SUMMARY
+
+      # ------------------------------------------------------------------
+      # 6. Publicar reporte de cobertura como artefacto descargable
       # ------------------------------------------------------------------
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -70,3 +81,4 @@ jobs:
           name: coverage-report
           path: coverage.xml
           retention-days: 30
+
