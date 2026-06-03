@@ -417,21 +417,6 @@ VITE_WS_URL=
 
 ---
 
-# 🔮 Futuras Mejoras
-
-- Sistema ELO completo
-- Ranking global
-- Torneos
-- Chat en partidas
-- Notificaciones en tiempo real
-- Redis para escalabilidad
-- Caché distribuido
-- Dockerización completa
-- CI/CD automatizado
-- Cobertura de pruebas automatizadas
-
----
-
 # ✅ Aspectos Destacados
 
 - Arquitectura por capas
